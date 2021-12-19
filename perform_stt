@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Set up env vars
+export LD_LIBRARY_PATH=~/tlap-rs/native_client/lin-cpu/
+export LIBRARY_PATH=~/tlap-rs/native_client/lin-cpu/
+export RUSTFLAGS="-C target-cpu=native"
+
+# Fix Wave container
+ffmpeg -i audio/$1 recording.wav
+#ffmpeg -i audio/$1 -ac 1 -af aresample=resampler=soxr -ar 16000 -vn recording.ogg
+
+# Run program
+cargo run pr recording.wav recording.srt
+#cargo run --release pr recording.ogg recording.srt
