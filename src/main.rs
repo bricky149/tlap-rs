@@ -1,5 +1,5 @@
 /*
-	Copyright 2021 Bricky <bricky149@teknik.io>
+	Copyright 2021-2022 Bricky <bricky149@teknik.io>
 
     This file is part of tlap.
 
@@ -17,14 +17,14 @@
     License along with tlap. If not, see <https://www.gnu.org/licenses/>.
 */
 extern crate audrey;
+extern crate coqui_stt;
 extern crate dasp_interpolate;
 extern crate dasp_signal;
-extern crate deepspeech;
 
 use audrey::read::Reader;
+use coqui_stt::{Model, Stream};
 use dasp_interpolate::linear::Linear;
 use dasp_signal::{from_iter, Signal, interpolate::Converter};
-use deepspeech::Model;
 
 #[cfg(target_os = "linux")]
 extern crate hound;
@@ -112,7 +112,6 @@ fn write_subs_realtime(subs_path :&str, sub_count :u16, past_ts :u128, now :u128
 fn stt_intermediate(mut model :Model, subs_path :String) {
     let pa = pa::PortAudio::new().unwrap();
     let input_settings = pa.default_input_stream_settings(1, 16000.0, 1024).unwrap();
-	let mut stream = model.create_stream().unwrap();
 	// Subtitle properties
 	let start = Instant::now();
 	let mut prev_text_len = 0;
@@ -131,6 +130,7 @@ fn stt_intermediate(mut model :Model, subs_path :String) {
 	let mut writer = WavWriter::create(rec_path, spec).unwrap();
 	// Main audio loop
     let process_audio = move |pa::InputStreamCallbackArgs { buffer, .. }| {
+		let mut stream = Stream::from_model(&mut model).unwrap();
         stream.feed_audio(buffer);
         match stream.intermediate_decode() {
             Ok(mut text) => {
@@ -236,7 +236,7 @@ fn stt_postrecord(mut model :Model, audio_buf :Vec<i16>) -> Vec<String> {
 	// Instead of splitting the buffer and getting incorrect results
 	// feed the buffer directly into the model stream and count every
 	// 80000 samples (16000 samples * 5 seconds) as a subtitle line
-	let mut stream = model.create_stream().unwrap();
+	let mut stream = model.as_streaming().unwrap();
 	// Store ten minutes' worth of lines before realloc
 	let mut sub_lines = Vec::with_capacity(120);
 	let mut sample_vec = Vec::with_capacity(1);
@@ -323,24 +323,26 @@ fn get_audio_samples(audio_path :String) -> Vec<i16> {
 
 fn get_model() -> Model {
 	let dir_path = Path::new("models/");
-	let mut graph_name = dir_path.join("").into_boxed_path();
-	let mut scorer_name = dir_path.join("").into_boxed_path();
+	let mut graph_name = String::from("models/model.tflite");
+	let mut scorer_name = String::new();
 	// Search for model and scorer
 	for file in dir_path.read_dir().unwrap().flatten() {
         let file_path = file.path();
         if file_path.is_file() {
             if let Some(ext) = file_path.extension() {
-                if ext == "pbmm" {
-                    graph_name = file_path.into_boxed_path()
+                if ext == "tflite" {
+                    graph_name = file_path.display().to_string()
                 } else if ext == "scorer" {
-                    scorer_name = file_path.into_boxed_path()
+                    scorer_name = file_path.display().to_string()
                 }
             }
         }
 	}
-	// Return loaded model and scorer
-	let mut m = Model::load_from_files(&graph_name).unwrap();
-	m.enable_external_scorer(&scorer_name).unwrap();
+	// Return loaded model and optional scorer
+	let mut m = Model::new(graph_name).unwrap();
+	if !scorer_name.is_empty() {
+		m.enable_external_scorer(scorer_name).unwrap();
+	}
 	m
 }
 

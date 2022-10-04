@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Set up env vars
-export LD_LIBRARY_PATH=~/tlap-rs/native_client/lin-cpu/
-export LIBRARY_PATH=~/tlap-rs/native_client/lin-cpu/
+export LD_LIBRARY_PATH=~/Git/tlap-rs/native_client/lin-cpu/
+export LIBRARY_PATH=~/Git/tlap-rs/native_client/lin-cpu/
 export RUSTFLAGS="-C target-cpu=native"
 
 # Fix Wave container

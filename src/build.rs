@@ -20,11 +20,11 @@
 // environment variables set either in the helper script or in the OS.
 #[cfg(target_os = "linux")]
 fn main() {
-	println!("cargo:rustc-env=LD_LIBRARY_PATH=~/tlap-rs/native_client/lin-cpu/");
-	println!("cargo:rustc-env=LIBRARY_PATH=~/tlap-rs/native_client/lin-cpu/");
+	println!("cargo:rustc-env=LD_LIBRARY_PATH=~/Git/tlap-rs/native_client/lin-cpu/");
+	println!("cargo:rustc-env=LIBRARY_PATH=~/Git/tlap-rs/native_client/lin-cpu/");
 }
 #[cfg(target_os = "windows")]
 fn main() {
-	println!(r"cargo:rustc-link-search=C:\Users\bricky\tlap-rs\native_client\win-cuda\");
-	println!("cargo:rustc-link-lib=deepspeech.so.if");
+	println!(r"cargo:rustc-link-search=C:\Users\Bricky\Git\tlap-rs\native_client\win-cuda\");
+	println!("cargo:rustc-link-lib=libstt.so.if");
 }

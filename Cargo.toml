@@ -1,14 +1,14 @@
 [package]
 name = "tlap"
 description = "Transliterate Language for an Accessibility Purpose"
-version = "0.3.2"
+version = "0.4.0"
 authors = ["Bricky <bricky149@teknik.io>"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-deepspeech = "0.9.*"
+coqui-stt = "1.0.*"
 audrey = "*"
 dasp_interpolate = { version = "*", features = ["linear"] }
 dasp_signal = "*"
