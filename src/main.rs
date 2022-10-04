@@ -16,6 +16,7 @@
     You should have received a copy of the GNU Lesser General Public
     License along with tlap. If not, see <https://www.gnu.org/licenses/>.
 */
+
 extern crate audrey;
 
 extern crate coqui_stt;

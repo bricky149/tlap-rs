@@ -1,3 +1,22 @@
+/*
+	Copyright 2021-2022 Bricky <bricky149@teknik.io>
+
+    This file is part of tlap.
+
+    tlap is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Lesser General Public License as
+    published by the Free Software Foundation, either version 3 of
+    the License, or (at your option) any later version.
+
+    tlap is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with tlap. If not, see <https://www.gnu.org/licenses/>.
+*/
+
 use std::io::{Result, Write};
 
 #[cfg(target_os = "linux")]
@@ -11,7 +30,7 @@ pub struct Subtitle {
 
 impl Subtitle {
     pub fn from(sub_count :u16, past_ts :u128, now :u128, sub_body :String)
-        -> Subtitle {
+        -> Self {
         
         let (first_hour, first_minute, first_second, first_ms) = get_timestamp(past_ts);
         let (second_hour, second_minute, second_second, second_ms) = get_timestamp(now);
@@ -25,7 +44,7 @@ impl Subtitle {
         }
     }
 
-    pub fn from_lines(lines :Vec<String>) -> Vec<Subtitle> {
+    pub fn from_lines(lines :Vec<String>) -> Vec<Self> {
         let mut subs = Vec::new();
 
         let count = 1;
