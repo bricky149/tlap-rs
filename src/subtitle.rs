@@ -67,6 +67,28 @@ impl Subtitle {
 
         subs
     }
+
+    pub fn flush_all(subtitles :Vec<Self>) -> Result<()> {
+        let mut file = OpenOptions::new().append(true).create(true).open("recording.srt").unwrap();
+    
+        for subtitle in subtitles {
+            writeln!(file, "{}", subtitle.number)?;
+            writeln!(file, "{}", subtitle.timestamp)?;
+            writeln!(file, "{}\n", subtitle.caption)?;
+        }
+    
+        Ok(())
+    }
+    
+    pub fn flush_one(self) -> Result<()> {
+        let mut file = OpenOptions::new().append(true).create(true).open("recording.srt").unwrap();
+    
+        writeln!(file, "{}", self.number)?;
+        writeln!(file, "{}", self.timestamp)?;
+        writeln!(file, "{}\n", self.caption)?;
+    
+        Ok(())
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -92,26 +114,4 @@ fn get_timestamp(timestamp :u128) -> (u128, u128, u128, u128) {
     }
 
     (hours, minutes, seconds, ms)
-}
-
-pub fn flush_all(subtitles :Vec<Subtitle>) -> Result<()> {
-    let mut file = OpenOptions::new().append(true).create(true).open("recording.srt").unwrap();
-
-    for subtitle in subtitles {
-        writeln!(file, "{}", subtitle.number)?;
-        writeln!(file, "{}", subtitle.timestamp)?;
-        writeln!(file, "{}\n", subtitle.caption)?;
-    }
-
-    Ok(())
-}
-
-pub fn flush_one(subtitle :Subtitle) -> Result<()> {
-    let mut file = OpenOptions::new().append(true).create(true).open("recording.srt").unwrap();
-
-    writeln!(file, "{}", subtitle.number)?;
-    writeln!(file, "{}", subtitle.timestamp)?;
-    writeln!(file, "{}\n", subtitle.caption)?;
-
-    Ok(())
 }
