@@ -47,7 +47,7 @@ impl Subtitle {
     pub fn from_lines(lines :Vec<String>) -> Vec<Self> {
         let mut subs = Vec::new();
 
-        let count = 1;
+        let mut count = 1;
         let mut ms = 0;
 
         for line in lines {
@@ -62,7 +62,9 @@ impl Subtitle {
                             second_hour, second_minute, second_second, second_ms),
                 caption: line
             };
-            subs.push(sub)
+            subs.push(sub);
+            
+            count += 1
         }
 
         subs
