@@ -63,7 +63,7 @@ pub fn get_model() -> Model {
     // Return loaded model and optional scorer
     let mut m = Model::new(graph_name).unwrap();
     if !scorer_name.is_empty() {
-        m.enable_external_scorer(scorer_name).unwrap();
+        m.enable_external_scorer(scorer_name).unwrap()
     }
     m
 }
@@ -82,14 +82,13 @@ pub fn record_input(mut model :Model) {
 
     let writer = hound::WavWriter::create(RECORDING_PATH, spec).unwrap();
     let writer = Arc::new(Mutex::new(Some(writer)));
-    let writer_2 = writer.clone();
 
     let err_fn = |err| eprintln!("An error occurred on the input audio stream: {}", err);
 
     let stream = device.build_input_stream(
-        &config.into(),
+        &config,
         move |data, _: &_| {
-            write_input_data(data, &writer_2);
+            write_input_data(data, &writer)
         },
         err_fn,
     ).unwrap();
@@ -106,17 +105,16 @@ pub fn record_input(mut model :Model) {
 
         let samples = get_audio_samples(RECORDING_PATH.into());
         let samples_length = samples.len();
-        let new_samples;
 
-        if samples_length > FOUR_SECONDS {
+        let new_samples = if samples_length > FOUR_SECONDS {
             let cursor = samples_length - FOUR_SECONDS;
-            new_samples = samples.split_at(cursor).1;
+            samples.split_at(cursor).1
         } else {
             // First loop falls short of 64K samples
-            new_samples = samples.split_at(0).1;
-        }
+            samples.split_at(0).1
+        };
 
-        match model.speech_to_text(&new_samples) {
+        match model.speech_to_text(new_samples) {
             Ok(text) => {
                 let now = start.elapsed().as_millis();
                 let sub = Subtitle::from(sub_count, past_ts, now, text);
@@ -147,7 +145,7 @@ pub fn get_transcript(mut model :Model, sample_lines :Vec<[i16;64000]>) -> Vec<S
         match model.speech_to_text(&line) {
             Ok(text) => {
                 println!("{}", text);
-                sub_lines.push(text);
+                sub_lines.push(text)
             },
             Err(e) => eprintln!("Coqui error: {:?}", e)
         }
@@ -204,7 +202,7 @@ fn get_input_config() -> StreamConfig {
     StreamConfig {
         channels: 1,
         sample_rate: SampleRate(16000),
-        buffer_size: BufferSize::Fixed(1024),
+        buffer_size: BufferSize::Fixed(1024)
     }
 }
 
@@ -213,7 +211,7 @@ fn get_spec() -> WavSpec {
         bits_per_sample: 16,
         channels: 1,
         sample_format: SampleFormat::Int,
-        sample_rate: SAMPLE_RATE,
+        sample_rate: SAMPLE_RATE
     }
 }
 
