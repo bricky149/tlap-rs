@@ -33,8 +33,8 @@ use portaudio as pa;
 #[cfg(target_os = "linux")]
 use std::time::Instant;
 
-// 16000 samples * 5 seconds
-const FIVE_SECONDS :usize = 80000;
+// 16000 samples * 4 seconds
+const FOUR_SECONDS :usize = 64000;
 // Model has been trained on this specific sample rate
 const SAMPLE_RATE :u32 = 16000;
 
@@ -146,8 +146,8 @@ impl TlapCoqui {
                     let now = start.elapsed().as_millis();
                     let time_diff = now - past_ts;
 
-                    // Write subs every five or so seconds we are looping
-                    if time_diff > 5000 && !sub_written {
+                    // Write subs every four or so seconds we are looping
+                    if time_diff >= 4000 && !sub_written {
                         // We are only interested in new speech
                         let mut last_word = prev_words.rfind(' ').unwrap_or(0);
                         prev_words = text.clone();
@@ -231,20 +231,20 @@ pub fn split_audio_lines(audio_buffer :Vec<i16>) -> Vec<[i16;64000]> {
     let mut audio_lines :Vec<[i16;64000]> = Vec::new();
 
     let audio_length = audio_buffer.len();
-    let total_lines = audio_length / FIVE_SECONDS;
+    let total_lines = audio_length / FOUR_SECONDS;
 
     let mut current_samples;
-    let mut samples_to_process = audio_buffer.split_at(FIVE_SECONDS).1;
+    let mut samples_to_process = audio_buffer.split_at(FOUR_SECONDS).1;
     let mut sample_buffer;
 
     for line_num in 0..=total_lines {
         if line_num == 0 {
-            current_samples = audio_buffer.split_at(FIVE_SECONDS).0;
+            current_samples = audio_buffer.split_at(FOUR_SECONDS).0;
             sample_buffer = samples_to_process;
             samples_to_process = sample_buffer
         } else if line_num < total_lines {
-            current_samples = samples_to_process.split_at(FIVE_SECONDS).0;
-            sample_buffer = samples_to_process.split_at(FIVE_SECONDS).1;
+            current_samples = samples_to_process.split_at(FOUR_SECONDS).0;
+            sample_buffer = samples_to_process.split_at(FOUR_SECONDS).1;
             samples_to_process = sample_buffer
         } else {
             current_samples = samples_to_process

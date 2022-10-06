@@ -52,7 +52,7 @@ impl Subtitle {
 
         for line in lines {
             let (first_hour, first_minute, first_second, first_ms) = get_timestamp(ms);
-            ms += 5000;
+            ms += 4000;
             let (second_hour, second_minute, second_second, second_ms) = get_timestamp(ms);
 
             let sub = Subtitle {
