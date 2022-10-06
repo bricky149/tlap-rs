@@ -17,18 +17,12 @@
     License along with tlap. If not, see <https://www.gnu.org/licenses/>.
 */
 
-extern crate audrey;
 extern crate coqui_stt;
-extern crate dasp_interpolate;
-extern crate dasp_signal;
-
+extern crate cpal;
 #[cfg(target_os = "linux")]
 extern crate hound;
-#[cfg(target_os = "linux")]
-extern crate portaudio;
 
 use std::env::args;
-//use std::io::Write;
 
 mod speech;
 use speech::*;
@@ -87,11 +81,11 @@ fn main() {
 				}
 			};
 
-			let audio_buffer = get_audio(audio_path);
+			let audio_buffer = get_audio_samples(audio_path);
 			let audio_lines = split_audio_lines(audio_buffer);
 			
-			let model = TlapCoqui::new();
-            let lines = TlapCoqui::get_transcript(model, audio_lines);
+			let model = get_model();
+            let lines = get_transcript(model, audio_lines);
 
 			let subs = Subtitle::from_lines(lines);
 			match Subtitle::flush_all(subs) {
@@ -100,8 +94,8 @@ fn main() {
 			};
 		},
 		TranscriptionType::RealTime => {
-			let model = TlapCoqui::new();
-			TlapCoqui::get_live_lines(model)
+			let model = get_model();
+			record_input(model);
 		}
 	}
 }

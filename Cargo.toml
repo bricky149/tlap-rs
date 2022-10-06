@@ -8,12 +8,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-coqui-stt = "1.0.*"
-audrey = "*"
-dasp_interpolate = { version = "*", features = ["linear"] }
-dasp_signal = "*"
+coqui-stt = "*"
+cpal = "*"
 hound = "*"
-portaudio = "*"
 
 [profile.release]
 codegen-units = 4

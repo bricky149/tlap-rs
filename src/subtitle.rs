@@ -29,13 +29,11 @@ pub struct Subtitle {
 }
 
 impl Subtitle {
-    pub fn from(sub_count :u16, past_ts :u128, now :u128, sub_body :String)
-        -> Self {
-        
+    pub fn from(sub_count :u16, past_ts :u128, now :u128, sub_body :String) -> Self {
         let (first_hour, first_minute, first_second, first_ms) = get_timestamp(past_ts);
         let (second_hour, second_minute, second_second, second_ms) = get_timestamp(now);
 
-        Subtitle {
+        Self {
             number: sub_count,
             timestamp: format!("{:02}:{:02}:{:02},{:03} --> {:02}:{:02}:{:02},{:03}",
                         first_hour, first_minute, first_second, first_ms,
@@ -55,7 +53,7 @@ impl Subtitle {
             ms += 4000;
             let (second_hour, second_minute, second_second, second_ms) = get_timestamp(ms);
 
-            let sub = Subtitle {
+            let sub = Self {
                 number: count,
                 timestamp: format!("{:02}:{:02}:{:02},{:03} --> {:02}:{:02}:{:02},{:03}",
                             first_hour, first_minute, first_second, first_ms,
@@ -71,8 +69,12 @@ impl Subtitle {
     }
 
     pub fn flush_all(subtitles :Vec<Self>) -> Result<()> {
-        let mut file = OpenOptions::new().append(true).create(true).open("recording.srt").unwrap();
-    
+        let mut file = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open("recording.srt")
+            .unwrap();
+
         for subtitle in subtitles {
             writeln!(file, "{}", subtitle.number)?;
             writeln!(file, "{}", subtitle.timestamp)?;
@@ -83,8 +85,12 @@ impl Subtitle {
     }
     
     pub fn flush_one(self) -> Result<()> {
-        let mut file = OpenOptions::new().append(true).create(true).open("recording.srt").unwrap();
-    
+        let mut file = OpenOptions::new()
+            .append(true)
+            .create(true)
+            .open("recording.srt")
+            .unwrap();
+
         writeln!(file, "{}", self.number)?;
         writeln!(file, "{}", self.timestamp)?;
         writeln!(file, "{}\n", self.caption)?;
