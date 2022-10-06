@@ -76,8 +76,6 @@ fn main() {
 		}
 	};
 
-	let model = TlapCoqui::new();
-
 	match stt_type {
 		TranscriptionType::PostRecord => {
 			let audio_path = match args().nth(2) {
@@ -90,15 +88,19 @@ fn main() {
 			};
 
 			let audio_buffer = get_audio(audio_path);
-            let lines = TlapCoqui::get_recorded_lines(model, audio_buffer);
-			let subs = Subtitle::from_lines(lines);
+			let audio_lines = split_audio_lines(audio_buffer);
+			
+			let model = TlapCoqui::new();
+            let lines = TlapCoqui::get_transcript(model, audio_lines);
 
+			let subs = Subtitle::from_lines(lines);
 			match Subtitle::flush_all(subs) {
 				Ok(()) => println!("Subtitles written successfully."),
 				Err(e) => eprintln!("Error writing subtitles: {:?}", e)
 			};
 		},
 		TranscriptionType::RealTime => {
+			let model = TlapCoqui::new();
 			TlapCoqui::get_live_lines(model)
 		}
 	}

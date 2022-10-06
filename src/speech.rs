@@ -68,16 +68,12 @@ impl TlapCoqui {
         if !scorer_name.is_empty() {
             m.enable_external_scorer(scorer_name).unwrap();
         }
-        TlapCoqui {
-            model: m
-        }
+        TlapCoqui { model: m }
     }
 
-    pub fn get_recorded_lines(mut self, audio_buffer :Vec<i16>) -> Vec<String> {
+    pub fn get_transcript(mut self, sample_lines :Vec<[i16;64000]>) -> Vec<String> {
         // Store an hours' worth of lines before realloc
         let mut sub_lines = Vec::with_capacity(720);
-    
-        let sample_lines = get_sample_lines(audio_buffer);
         let mut prev_words = String::from(" ");
     
         for line in sample_lines {
@@ -124,7 +120,7 @@ impl TlapCoqui {
             bits_per_sample: 16,
             channels: 1,
             sample_format: SampleFormat::Int,
-            sample_rate: 16000,
+            sample_rate: SAMPLE_RATE,
         };
         let mut writer = WavWriter::create(rec_path, spec).unwrap();
 
@@ -213,11 +209,11 @@ pub fn get_audio(audio_path :String) -> Vec<i16> {
 	let desc = reader.description();
 	assert_eq!(1, desc.channel_count(), "Only monoaural audio is accepted");
 
-	// Obtain buffer of samples
 	let audio_buffer :Vec<i16> = if desc.sample_rate() == SAMPLE_RATE {
+        println!("Obtaining buffer of samples...");
 		reader.samples().map(|s| s.unwrap()).collect()
 	} else {
-		// We need to interpolate to the target sample rate
+		println!("Interpolating to the target sample rate...");
 		let interpolator = Linear::new([0i16], [0]);
 
 		let conv = Converter::from_hz_to_hz(
@@ -231,29 +227,34 @@ pub fn get_audio(audio_path :String) -> Vec<i16> {
 	audio_buffer
 }
 
-fn get_sample_lines(sample_buffer :Vec<i16>) -> Vec<[i16;80000]> {
-    let mut sample_lines :Vec<[i16;80000]> = Vec::new();
+pub fn split_audio_lines(audio_buffer :Vec<i16>) -> Vec<[i16;64000]> {
+    let mut audio_lines :Vec<[i16;64000]> = Vec::new();
 
-    let sample_length = sample_buffer.len();
-    let total_lines = sample_length / FIVE_SECONDS;
-    let mut prev_cursor = 0;
-    
-    for lines_left in total_lines..=0 {
-        let cursor = if lines_left > 0 {
-            prev_cursor + 80000
+    let audio_length = audio_buffer.len();
+    let total_lines = audio_length / FIVE_SECONDS;
+
+    let mut current_samples;
+    let mut samples_to_process = audio_buffer.split_at(FIVE_SECONDS).1;
+    let mut sample_buffer;
+
+    for line_num in 0..=total_lines {
+        if line_num == 0 {
+            current_samples = audio_buffer.split_at(FIVE_SECONDS).0;
+            sample_buffer = samples_to_process;
+            samples_to_process = sample_buffer
+        } else if line_num < total_lines {
+            current_samples = samples_to_process.split_at(FIVE_SECONDS).0;
+            sample_buffer = samples_to_process.split_at(FIVE_SECONDS).1;
+            samples_to_process = sample_buffer
         } else {
-            sample_length - prev_cursor
+            current_samples = samples_to_process
         };
 
-        // TODO: We leak memory by not assigning the second value from split_at()
-        let current_samples = sample_buffer.split_at(cursor).1;
         match current_samples.try_into() {
-            Ok(l) => sample_lines.push(l),
+            Ok(l) => audio_lines.push(l),
             Err(e) => eprintln!("{:?}", e)
         };
-
-        prev_cursor = cursor;
     }
 
-    sample_lines
+    audio_lines
 }
