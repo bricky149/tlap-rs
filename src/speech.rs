@@ -74,21 +74,22 @@ impl TlapCoqui {
     pub fn get_transcript(mut self, sample_lines :Vec<[i16;64000]>) -> Vec<String> {
         // Store an hours' worth of lines before realloc
         let mut sub_lines = Vec::with_capacity(720);
-        let mut prev_words = String::from(" ");
+        //let mut prev_words = String::from(" ");
     
         for line in sample_lines {
             match self.model.speech_to_text(&line) {
-                Ok(mut text) => {
+                Ok(text) => {
+                    println!("{}", text);
                     // We are only interested in new speech
-                    let mut last_word = prev_words.rfind(' ').unwrap_or(0);
-                    prev_words = text.clone();
-                    let mut sub_line = text.split_off(last_word);
+                    //let mut last_word = prev_words.rfind(' ').unwrap_or(0);
+                    //prev_words = text.clone();
+                    //let mut sub_line = text.split_off(last_word);
     
                     // Remove last word as it may change in next iteration
-                    last_word = sub_line.rfind(' ').unwrap_or(0);
-                    sub_line.truncate(last_word);
+                    //last_word = sub_line.rfind(' ').unwrap_or(0);
+                    //sub_line.truncate(last_word);
     
-                    sub_lines.push(sub_line);
+                    sub_lines.push(text);
                 },
                 Err(e) => eprintln!("Coqui error: {:?}", e)
             }
