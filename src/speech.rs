@@ -20,18 +20,14 @@
 use coqui_stt::Model;
 use cpal::{BufferSize, SampleRate, StreamConfig};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use hound::{SampleFormat, WavSpec};
+
 use crate::Subtitle;
 
-#[cfg(target_os = "linux")]
-use hound::{SampleFormat, WavSpec, WavWriter};
-
-use std::fs::File;
-use std::io::BufWriter;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-
-#[cfg(target_os = "linux")]
-use std::time::Instant;
+use std::thread;
+use std::time::{Duration, Instant};
 
 // 16000 samples * 4 seconds
 const FOUR_SECONDS :usize = 64000;
@@ -42,28 +38,26 @@ const SAMPLE_RATE :u32 = 16000;
 
 pub fn get_model() -> Model {
     let dir_path = Path::new("models/");
-    let mut graph_name = String::new();
-    let mut scorer_name = String::new();
+    let mut model_path = String::new();
+    let mut scorer_path = String::new();
 
-    // Search for model and scorer
-    for file in dir_path.read_dir().unwrap().flatten() {
+    for file in dir_path.read_dir().expect("Unable to read models dir.").flatten() {
         let file_path = file.path();
         
         if file_path.is_file() {
             if let Some(ext) = file_path.extension() {
                 if ext == "tflite" {
-                    graph_name = file_path.display().to_string()
+                    model_path = file_path.display().to_string()
                 } else if ext == "scorer" {
-                    scorer_name = file_path.display().to_string()
+                    scorer_path = file_path.display().to_string()
                 }
             }
         }
     }
 
-    // Return loaded model and optional scorer
-    let mut m = Model::new(graph_name).unwrap();
-    if !scorer_name.is_empty() {
-        m.enable_external_scorer(scorer_name).unwrap()
+    let mut m = Model::new(model_path).expect("Unable to open model file.");
+    if !scorer_path.is_empty() {
+        m.enable_external_scorer(scorer_path).expect("Unable to open scorer file.")
     }
     m
 }
@@ -72,96 +66,118 @@ pub fn get_model() -> Model {
     This was inspired by code from Tyler Anton (https://github.com/tylerdotdev)
     https://stackoverflow.com/questions/67105792/getting-blank-results-from-deepspeech-with-portaudio-in-rust
 */
-pub fn record_input(mut model :Model) {
+pub fn record_input(model :Model) {
+    // Capture input device
     let host = cpal::default_host();
-    let device = host.default_input_device().expect("No input device available");
+    let device = host.default_input_device().expect("No input device available.");
     let config = get_input_config();
 
     // Prepare audio recording file for writing
     let spec = get_spec();
+    let mut writer = hound::WavWriter::create(RECORDING_PATH, spec)
+                        .expect("Unable to create audio recording.");
 
-    let writer = hound::WavWriter::create(RECORDING_PATH, spec).unwrap();
-    let writer = Arc::new(Mutex::new(Some(writer)));
-
-    let err_fn = |err| eprintln!("An error occurred on the input audio stream: {}", err);
+    let err_fn = |err|
+        eprintln!("Input audio stream error: {}", err);
 
     let stream = device.build_input_stream(
         &config,
-        move |data, _: &_| {
-            write_input_data(data, &writer)
+        move |data :&[i16], _: &_| {
+            for &sample in data.iter() {
+                writer.write_sample(sample).expect("Unable to write sample.")
+            }
+            // Write samples to file to avoid reading
+            // nothing back when streaming
+            writer.flush().expect("Unable to flush samples to file.")
         },
         err_fn,
-    ).unwrap();
-    stream.play().unwrap();
+    ).expect("Unable to build input stream.");
+    stream.play().expect("Unable to play input stream.");
 
     // Subtitle properties
     let start = Instant::now();
     let mut sub_count = 1;
     let mut past_ts = 0;
 
+    // Allows model to be used across threads
+    let model_mutex = Mutex::new(model);
+    let model_arc = Arc::new(model_mutex);
+
     loop {
         // Wait for enough input to process
-        std::thread::sleep(std::time::Duration::from_millis(4000));
+        thread::sleep(Duration::from_secs(4));
 
-        let samples = get_audio_samples(RECORDING_PATH.into());
-        let samples_length = samples.len();
+        let now = start.elapsed().as_millis();
+        let thread_arc = model_arc.clone();
 
-        let new_samples = if samples_length > FOUR_SECONDS {
-            let cursor = samples_length - FOUR_SECONDS;
-            samples.split_at(cursor).1
-        } else {
-            // First loop falls short of 64K samples
-            samples.split_at(0).1
-        };
+        thread::spawn(move || {
+            if let Ok(mut model) = thread_arc.lock() {
+                let samples = get_audio_samples(RECORDING_PATH.into());
+                let samples_length = samples.len();
 
-        match model.speech_to_text(new_samples) {
-            Ok(text) => {
-                let now = start.elapsed().as_millis();
-                let sub = Subtitle::from(sub_count, past_ts, now, text);
-
-                match Subtitle::flush_one(sub) {
-                    Ok(()) => println!("Running for {} seconds...",
-                                        format_args!("{}", now / 1000)),
-                    Err(e) => eprintln!("Error writing subtitles: {:?}", e)
+                let new_samples = if samples_length > FOUR_SECONDS {
+                    let cursor = samples_length - FOUR_SECONDS;
+                    samples.split_at(cursor).1
+                } else {
+                    // First loop falls short of 64K samples
+                    samples.split_at(0).1
                 };
 
-                // Prepare for next iteration
-                sub_count += 1;
-                past_ts = now
+                match model.speech_to_text(new_samples) {
+                    Ok(text) => {
+                        let sub = Subtitle::from(sub_count, past_ts, now, text.clone());
+
+                        match Subtitle::write(sub) {
+                            Ok(()) => println!("{}", text),
+                            Err(e) => eprintln!("Error writing subtitles: {}", e)
+                        };
+                    }
+                    Err(e) => eprintln!("Error running Coqui: {}", e)
+                }
             }
-            Err(e) => eprintln!("Coqui error: {:?}", e)
-        }
+        });
+
+        // Prepare for next iteration
+        sub_count += 1;
+        past_ts = now
     }
 
     // Unreachable for now
     //drop(stream)
 }
 
-pub fn get_transcript(mut model :Model, sample_lines :Vec<[i16;64000]>) -> Vec<String> {
-    // Store an hours' worth of lines before realloc
-    let mut sub_lines = Vec::with_capacity(720);
+pub fn get_transcript(mut model :Model, sample_lines :Vec<[i16;64000]>) {
+    let mut sub_count = 1;
+    let mut past_ts = 0;
 
     for line in sample_lines {
         match model.speech_to_text(&line) {
             Ok(text) => {
-                println!("{}", text);
-                sub_lines.push(text)
-            },
-            Err(e) => eprintln!("Coqui error: {:?}", e)
-        }
-    }
+                let sub = Subtitle::from_line(sub_count, past_ts, text.clone());
 
-    sub_lines
+                match Subtitle::write(sub) {
+                    Ok(()) => println!("{}", text),
+                    Err(e) => eprintln!("Error writing subtitles: {}", e)
+                };
+            },
+            Err(e) => eprintln!("Error running Coqui: {}", e)
+        }
+
+        // Prepare for next iteration
+        sub_count += 1;
+        past_ts += 4000;
+    }
 }
 
 /*
-	This code was inspired by the RustAudio example client.
+	This code was inspired by the RustAudio example client
 	https://github.com/RustAudio/deepspeech-rs/blob/master/examples/client_simple.rs
 */
 pub fn get_audio_samples(audio_path :String) -> Vec<i16> {
-    let mut reader = hound::WavReader::open(audio_path).unwrap();
+    let mut reader = hound::WavReader::open(audio_path)
+                                .expect("Unable to open audio file.");
     let samples :Vec<i16> = reader.samples()
-                                .map(|s| s.unwrap())
+                                .map(|s| s.expect("Unable to read sample."))
                                 .collect();
     samples
 }
@@ -173,25 +189,36 @@ pub fn split_audio_lines(audio_buffer :Vec<i16>) -> Vec<[i16;64000]> {
     let total_lines = audio_length / FOUR_SECONDS;
 
     let mut current_samples;
-    let mut samples_to_process = audio_buffer.split_at(0).1;
-    let mut sample_buffer;
+    let mut samples_to_process;
+    let mut sample_buffer = audio_buffer.split_at(0).1;
 
-    for line_num in 0..=total_lines {
-        if line_num == 0 {
-            current_samples = audio_buffer.split_at(audio_length).0;
+    for _ in 0..=total_lines {
+        let remaining_length = sample_buffer.len();
+
+        if remaining_length >= FOUR_SECONDS {
+            current_samples = sample_buffer.split_at(FOUR_SECONDS).0;
+            samples_to_process = sample_buffer.split_at(FOUR_SECONDS).1;
             sample_buffer = samples_to_process;
-            samples_to_process = sample_buffer
-        } else if line_num < total_lines {
-            current_samples = samples_to_process.split_at(FOUR_SECONDS).0;
-            sample_buffer = samples_to_process.split_at(FOUR_SECONDS).1;
-            samples_to_process = sample_buffer
-        } else {
-            current_samples = samples_to_process
-        };
 
-        match current_samples.try_into() {
-            Ok(l) => audio_lines.push(l),
-            Err(e) => eprintln!("{:?}", e)
+            match current_samples.try_into() {
+                Ok(l) => audio_lines.push(l),
+                Err(e) => eprintln!("{}", e)
+            };
+        } else {
+            // Put remaining chunks in a vector and fill the empty
+            // space with zeroes so it is the right size
+            current_samples = sample_buffer;
+            let len = FOUR_SECONDS - current_samples.len();
+            let mut last_samples = vec![0i16;len];
+
+            for s in current_samples {
+                last_samples.push(*s)
+            }
+
+            match last_samples.try_into() {
+                Ok(l) => audio_lines.push(l),
+                Err(e) => eprintln!("{:?}", e)
+            };
         };
     }
 
@@ -212,18 +239,5 @@ fn get_spec() -> WavSpec {
         channels: 1,
         sample_format: SampleFormat::Int,
         sample_rate: SAMPLE_RATE
-    }
-}
-
-type WavWriterHandle = Arc<Mutex<Option<WavWriter<BufWriter<File>>>>>;
-
-fn write_input_data(input :&[i16], writer :&WavWriterHandle) {
-    if let Ok(mut guard) = writer.try_lock() {
-        if let Some(writer) = guard.as_mut() {
-            for &sample in input.iter() {
-                writer.write_sample(sample).ok();
-            }
-            writer.flush().ok();
-        }
     }
 }

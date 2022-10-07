@@ -19,7 +19,6 @@
 
 extern crate coqui_stt;
 extern crate cpal;
-#[cfg(target_os = "linux")]
 extern crate hound;
 
 use std::env::args;
@@ -34,18 +33,20 @@ const USAGE :&str = "tlap
 Transliterate Language for an Accessibility Purpose
 
 USAGE
-tlap {rt|realtime} [subfilepath]
-tlap {pr|postrecord} audiofilepath [subfilepath]
+tlap {rt|realtime}
+tlap {pr|postrecord} audiofilepath
 
 ARGUMENTS
 pr/postrecord, rt/realtime
 Determines whether to transliterate live or pre-recorded audio.
 
-audiofilepath (mandatory if pr/postrecord argument given)
-Audio file to transliterate from.";
+audiofilepath
+Audio file to transliterate from. Used when 'pr/postrecord' is passed.
+If nothing is given, uses 'recording.wav' from the current directory";
 
 enum TranscriptionType {
-	PostRecord = 1,
+	Invalid,
+	PostRecord,
 	RealTime
 }
 
@@ -57,45 +58,32 @@ fn main() {
 				"pr" => TranscriptionType::PostRecord,
 				"realtime" => TranscriptionType::RealTime,
 				"rt" => TranscriptionType::RealTime,
-				_ => {
-					eprintln!("Invalid speech-to-text type given.");
-					println!("{}", USAGE);
-					std::process::exit(1)
-				}
+				_ => TranscriptionType::Invalid
 			}
 		}
-		None => {
-			println!("{}", USAGE);
-			std::process::exit(1)
-		}
+		None => TranscriptionType::Invalid
 	};
 
 	match stt_type {
 		TranscriptionType::PostRecord => {
 			let audio_path = match args().nth(2) {
 				Some(path) => path,
-				None => {
-					eprintln!("Please specify an audio file.");
-					println!("{}", USAGE);
-					std::process::exit(2)
-				}
+				None => "recording.wav".into()
 			};
 
 			let audio_buffer = get_audio_samples(audio_path);
 			let audio_lines = split_audio_lines(audio_buffer);
 			
 			let model = get_model();
-            let lines = get_transcript(model, audio_lines);
-
-			let subs = Subtitle::from_lines(lines);
-			match Subtitle::flush_all(subs) {
-				Ok(()) => println!("Subtitles written successfully."),
-				Err(e) => eprintln!("Error writing subtitles: {:?}", e)
-			};
-		},
+            get_transcript(model, audio_lines);
+		}
 		TranscriptionType::RealTime => {
 			let model = get_model();
-			record_input(model);
+			record_input(model)
+		}
+		TranscriptionType::Invalid => {
+			eprintln!("Invalid speech-to-text type given.\n");
+			println!("{}", USAGE)
 		}
 	}
 }

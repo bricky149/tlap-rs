@@ -17,10 +17,8 @@
     License along with tlap. If not, see <https://www.gnu.org/licenses/>.
 */
 
-use std::io::{Result, Write};
-
-#[cfg(target_os = "linux")]
 use std::fs::OpenOptions;
+use std::io::{Result, Write};
 
 pub struct Subtitle {
     number: u16,
@@ -42,54 +40,26 @@ impl Subtitle {
         }
     }
 
-    pub fn from_lines(lines :Vec<String>) -> Vec<Self> {
-        let mut subs = Vec::new();
+    pub fn from_line(count :u16, timestamp :u128, line :String) -> Self {
+        let mut ms = timestamp;
+        let (first_hour, first_minute, first_second, first_ms) = get_timestamp(ms);
+        ms += 4000;
+        let (second_hour, second_minute, second_second, second_ms) = get_timestamp(ms);
 
-        let mut count = 1;
-        let mut ms = 0;
-
-        for line in lines {
-            let (first_hour, first_minute, first_second, first_ms) = get_timestamp(ms);
-            ms += 4000;
-            let (second_hour, second_minute, second_second, second_ms) = get_timestamp(ms);
-
-            let sub = Self {
-                number: count,
-                timestamp: format!("{:02}:{:02}:{:02},{:03} --> {:02}:{:02}:{:02},{:03}",
-                            first_hour, first_minute, first_second, first_ms,
-                            second_hour, second_minute, second_second, second_ms),
-                caption: line
-            };
-            subs.push(sub);
-            
-            count += 1
+        Self {
+            number: count,
+            timestamp: format!("{:02}:{:02}:{:02},{:03} --> {:02}:{:02}:{:02},{:03}",
+                        first_hour, first_minute, first_second, first_ms,
+                        second_hour, second_minute, second_second, second_ms),
+            caption: line
         }
-
-        subs
     }
-
-    pub fn flush_all(subtitles :Vec<Self>) -> Result<()> {
+    
+    pub fn write(self) -> Result<()> {
         let mut file = OpenOptions::new()
             .append(true)
             .create(true)
-            .open("recording.srt")
-            .unwrap();
-
-        for subtitle in subtitles {
-            writeln!(file, "{}", subtitle.number)?;
-            writeln!(file, "{}", subtitle.timestamp)?;
-            writeln!(file, "{}\n", subtitle.caption)?;
-        }
-    
-        Ok(())
-    }
-    
-    pub fn flush_one(self) -> Result<()> {
-        let mut file = OpenOptions::new()
-            .append(true)
-            .create(true)
-            .open("recording.srt")
-            .unwrap();
+            .open("recording.srt")?;
 
         writeln!(file, "{}", self.number)?;
         writeln!(file, "{}", self.timestamp)?;
@@ -99,27 +69,29 @@ impl Subtitle {
     }
 }
 
-#[cfg(target_os = "linux")]
 fn get_timestamp(timestamp :u128) -> (u128, u128, u128, u128) {
     let mut ms = timestamp;
 
-    let mut seconds = 0;
-    if ms > 999 {
-        seconds = timestamp / 1000;
-        ms -= 1000 * seconds
-    }
+    let mut seconds =  if ms > 999 {
+        ms / 1000
+    } else {
+        0
+    };
+    ms -= 1000 * seconds;
 
-    let mut minutes = 0;
-    if seconds > 59 {
-        minutes = seconds / 60;
-        seconds -= 60 * minutes
-    }
+    let mut minutes = if seconds > 59 {
+        seconds / 60
+    } else {
+        0
+    };
+    seconds -= 60 * minutes;
 
-    let mut hours = 0;
-    if minutes > 59 {
-        hours = minutes / 60;
-        minutes -= 60 * hours
-    }
+    let hours = if minutes > 59 {
+        minutes / 60
+    } else {
+        0
+    };
+    minutes -= 60 * hours;
 
     (hours, minutes, seconds, ms)
 }

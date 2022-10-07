@@ -10,5 +10,4 @@ export LIBRARY_PATH=~/Git/tlap-rs/native_client/lin-cpu/
 
 # Run program
 cargo run rt
-#cargo run pr recording.wav recording.srt
-
+#cargo run pr
