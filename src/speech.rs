@@ -31,8 +31,9 @@ use std::time::{Duration, Instant};
 
 // 16000 samples * 4 seconds
 const FOUR_SECONDS :usize = 64000;
-// Use current working directory
-const RECORDING_PATH: &str = "recording.wav";
+// Use current directory for live transcriptions
+const LIVE_RECORDING_PATH :&str = "recording.wav";
+const LIVE_RECORDING_SUBS :&str = "recording.srt";
 // Model has been trained on this specific sample rate
 const SAMPLE_RATE :u32 = 16000;
 
@@ -74,7 +75,7 @@ pub fn record_input(model :Model) {
 
     // Prepare audio recording file for writing
     let spec = get_spec();
-    let mut writer = hound::WavWriter::create(RECORDING_PATH, spec)
+    let mut writer = hound::WavWriter::create(LIVE_RECORDING_PATH, spec)
                         .expect("Unable to create audio recording.");
 
     let err_fn = |err|
@@ -112,7 +113,7 @@ pub fn record_input(model :Model) {
 
         thread::spawn(move || {
             if let Ok(mut model) = thread_arc.lock() {
-                let samples = get_audio_samples(RECORDING_PATH.into());
+                let samples = get_audio_samples(LIVE_RECORDING_PATH.into());
                 let samples_length = samples.len();
 
                 let new_samples = if samples_length > FOUR_SECONDS {
@@ -127,7 +128,7 @@ pub fn record_input(model :Model) {
                     Ok(text) => {
                         let sub = Subtitle::from(sub_count, past_ts, now, text.clone());
 
-                        match Subtitle::write(sub) {
+                        match Subtitle::write(sub, LIVE_RECORDING_SUBS.into()) {
                             Ok(()) => println!("{}", text),
                             Err(e) => eprintln!("Error writing subtitles: {}", e)
                         };
@@ -146,7 +147,9 @@ pub fn record_input(model :Model) {
     //drop(stream)
 }
 
-pub fn get_transcript(mut model :Model, sample_lines :Vec<[i16;64000]>) {
+pub fn get_transcript(mut model :Model, sample_lines :Vec<[i16;64000]>,
+    subs_path :String) {
+
     let mut sub_count = 1;
     let mut past_ts = 0;
 
@@ -155,7 +158,7 @@ pub fn get_transcript(mut model :Model, sample_lines :Vec<[i16;64000]>) {
             Ok(text) => {
                 let sub = Subtitle::from_line(sub_count, past_ts, text.clone());
 
-                match Subtitle::write(sub) {
+                match Subtitle::write(sub, subs_path.clone()) {
                     Ok(()) => println!("{}", text),
                     Err(e) => eprintln!("Error writing subtitles: {}", e)
                 };

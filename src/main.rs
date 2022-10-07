@@ -34,7 +34,7 @@ Transliterate Language for an Accessibility Purpose
 
 USAGE
 tlap {rt|realtime}
-tlap {pr|postrecord} audiofilepath
+tlap {pr|postrecord} [audiofilepath] [subtitlefilepath]
 
 ARGUMENTS
 pr/postrecord, rt/realtime
@@ -42,7 +42,11 @@ Determines whether to transliterate live or pre-recorded audio.
 
 audiofilepath
 Audio file to transliterate from. Used when 'pr/postrecord' is passed.
-If nothing is given, uses 'recording.wav' from the current directory";
+If nothing is given, audio will be saved as 'recording.wav' in the current directory.
+
+subfilepath
+Subtitle file to write to. Used when 'pr/postrecord' is passed.
+If nothing is given, appends '.srt' to the passed audio file path.";
 
 enum TranscriptionType {
 	Invalid,
@@ -63,19 +67,22 @@ fn main() {
 		}
 		None => TranscriptionType::Invalid
 	};
+	let audio_path = match args().nth(2) {
+		Some(path) => path,
+		None => "recording.wav".into()
+	};
+	let subs_path = match args().nth(3) {
+		Some(subs) => subs,
+		None => audio_path.clone() + ".srt"
+	};
 
 	match stt_type {
 		TranscriptionType::PostRecord => {
-			let audio_path = match args().nth(2) {
-				Some(path) => path,
-				None => "recording.wav".into()
-			};
-
 			let audio_buffer = get_audio_samples(audio_path);
 			let audio_lines = split_audio_lines(audio_buffer);
 			
 			let model = get_model();
-            get_transcript(model, audio_lines);
+            get_transcript(model, audio_lines, subs_path)
 		}
 		TranscriptionType::RealTime => {
 			let model = get_model();

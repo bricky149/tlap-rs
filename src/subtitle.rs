@@ -55,11 +55,11 @@ impl Subtitle {
         }
     }
     
-    pub fn write(self) -> Result<()> {
+    pub fn write(self, subs_path :String) -> Result<()> {
         let mut file = OpenOptions::new()
             .append(true)
             .create(true)
-            .open("recording.srt")?;
+            .open(subs_path)?;
 
         writeln!(file, "{}", self.number)?;
         writeln!(file, "{}", self.timestamp)?;
