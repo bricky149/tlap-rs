@@ -1,13 +1,10 @@
 #!/bin/bash
 
 # Set up env vars
-export LD_LIBRARY_PATH=~/Git/tlap-rs/native_client/lin-cpu/
-export LIBRARY_PATH=~/Git/tlap-rs/native_client/lin-cpu/
-
-# Fix Wave container
-#ffmpeg -i audio/$1 recording.wav
-#ffmpeg -i audio/$1 -ac 1 -af aresample=resampler=soxr -ar 16000 -vn recording.ogg
+export LD_LIBRARY_PATH=/usr/local/lib/
+export LIBRARY_PATH=/usr/local/lib/
 
 # Run program
-cargo run rt
-#cargo run pr
+./tlap rt
+#./tlap pr
+
