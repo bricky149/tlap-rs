@@ -29,7 +29,8 @@ use speech::*;
 mod subtitle;
 use subtitle::*;
 
-const USAGE :&str = "tlap
+const USAGE :&str = "
+tlap
 Transliterate Language for an Accessibility Purpose
 
 USAGE
@@ -46,7 +47,8 @@ If nothing is given, audio will be saved as 'recording.wav' in the current direc
 
 subfilepath
 Subtitle file to write to. Used when 'pr/postrecord' is passed.
-If nothing is given, appends '.srt' to the passed audio file path.";
+If nothing is given, appends '.srt' to the passed audio file path.
+";
 
 enum TranscriptionType {
 	Invalid,
@@ -67,10 +69,12 @@ fn main() {
 		}
 		None => TranscriptionType::Invalid
 	};
+
 	let audio_path = match args().nth(2) {
 		Some(path) => path,
 		None => "recording.wav".into()
 	};
+
 	let subs_path = match args().nth(3) {
 		Some(subs) => subs,
 		None => audio_path.clone() + ".srt"
@@ -89,7 +93,7 @@ fn main() {
 			record_input(model)
 		}
 		TranscriptionType::Invalid => {
-			eprintln!("Invalid speech-to-text type given.\n");
+			eprintln!("Invalid speech-to-text type given.");
 			println!("{}", USAGE)
 		}
 	}

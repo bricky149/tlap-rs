@@ -27,16 +27,16 @@ pub struct Subtitle {
 }
 
 impl Subtitle {
-    pub fn from(sub_count :u16, past_ts :u128, now :u128, sub_body :String) -> Self {
-        let (first_hour, first_minute, first_second, first_ms) = get_timestamp(past_ts);
-        let (second_hour, second_minute, second_second, second_ms) = get_timestamp(now);
+    pub fn from(count :u16, start :u128, end :u128, body :String) -> Self {
+        let (first_hour, first_minute, first_second, first_ms) = get_timestamp(start);
+        let (second_hour, second_minute, second_second, second_ms) = get_timestamp(end);
 
         Self {
-            number: sub_count,
+            number: count,
             timestamp: format!("{:02}:{:02}:{:02},{:03} --> {:02}:{:02}:{:02},{:03}",
                         first_hour, first_minute, first_second, first_ms,
                         second_hour, second_minute, second_second, second_ms),
-            caption: sub_body
+            caption: body
         }
     }
 
@@ -55,11 +55,11 @@ impl Subtitle {
         }
     }
     
-    pub fn write(self, subs_path :String) -> Result<()> {
+    pub fn write(self, path :String) -> Result<()> {
         let mut file = OpenOptions::new()
             .append(true)
             .create(true)
-            .open(subs_path)?;
+            .open(path)?;
 
         writeln!(file, "{}", self.number)?;
         writeln!(file, "{}", self.timestamp)?;

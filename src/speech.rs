@@ -108,7 +108,7 @@ pub fn record_input(model :Model) {
         // Wait for enough input to process
         thread::sleep(Duration::from_secs(4));
 
-        let now = start.elapsed().as_millis();
+        let now_ts = start.elapsed().as_millis();
         let thread_arc = model_arc.clone();
 
         thread::spawn(move || {
@@ -126,7 +126,7 @@ pub fn record_input(model :Model) {
 
                 match model.speech_to_text(new_samples) {
                     Ok(text) => {
-                        let sub = Subtitle::from(sub_count, past_ts, now, text.clone());
+                        let sub = Subtitle::from(sub_count, past_ts, now_ts, text.clone());
 
                         match Subtitle::write(sub, LIVE_RECORDING_SUBS.into()) {
                             Ok(()) => println!("{}", text),
@@ -140,7 +140,7 @@ pub fn record_input(model :Model) {
 
         // Prepare for next iteration
         sub_count += 1;
-        past_ts = now
+        past_ts = now_ts
     }
 
     // Unreachable for now
@@ -151,12 +151,12 @@ pub fn get_transcript(mut model :Model, sample_lines :Vec<[i16;64000]>,
     subs_path :String) {
 
     let mut sub_count = 1;
-    let mut past_ts = 0;
+    let mut timestamp = 0;
 
     for line in sample_lines {
         match model.speech_to_text(&line) {
             Ok(text) => {
-                let sub = Subtitle::from_line(sub_count, past_ts, text.clone());
+                let sub = Subtitle::from_line(sub_count, timestamp, text.clone());
 
                 match Subtitle::write(sub, subs_path.clone()) {
                     Ok(()) => println!("{}", text),
@@ -168,7 +168,7 @@ pub fn get_transcript(mut model :Model, sample_lines :Vec<[i16;64000]>,
 
         // Prepare for next iteration
         sub_count += 1;
-        past_ts += 4000;
+        timestamp += 4000;
     }
 }
 

@@ -7,4 +7,3 @@ export LIBRARY_PATH=/usr/local/lib/
 # Run program
 ./tlap rt
 #./tlap pr
-

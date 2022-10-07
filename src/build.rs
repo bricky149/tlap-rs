@@ -16,6 +16,7 @@
     You should have received a copy of the GNU Lesser General Public
     License along with tlap. If not, see <https://www.gnu.org/licenses/>.
 */
+
 // This is required for when `cargo build` is run. `cargo run` needs
 // environment variables set either in the helper script or in the OS.
 #[cfg(target_os = "linux")]
@@ -23,6 +24,7 @@ fn main() {
 	println!("cargo:rustc-env=LD_LIBRARY_PATH=/usr/local/bin");
 	println!("cargo:rustc-env=LIBRARY_PATH=/usr/local/bin");
 }
+
 #[cfg(target_os = "windows")]
 fn main() {
 	println!(r"cargo:rustc-link-search=C:\Users\Bricky\Git\tlap-rs\native_client\win-cpu\");
