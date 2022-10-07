@@ -1,5 +1,15 @@
 # Version History
 
+## v0.4.0 (2022-10-07)
+* Major codebase rewrite
+	* Migrated from deprecated DeepSpeech dependencies to [coqui-stt](https://github.com/tazz4843/coqui-stt)
+	* Migrated from PortAudio to cpal, allowing for cross-platform feature parity
+	* Removed resampling functionality, cutting external crates almost in half
+	* Separated speech-related and subtitle-related code into their own files
+	* Reworked sub streaming as to not pin CPU usage to 100%
+    * Threaded sub streaming to reduce transcription latency
+* As Coqui does not offer CUDA binaries, CUDA support has been removed
+
 ## v0.3.2 (2021-12-18)
 * Now working with CUDA!
 * Audio buffer no longer split into chunks as it resulted in missed words
