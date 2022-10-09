@@ -107,7 +107,8 @@ fn main() {
 			let audio_buffer = get_audio_samples(audio_path);
 			let audio_lines = split_audio_lines(audio_buffer);
 
-            get_transcript(model, audio_lines, subs_path)
+            get_transcript(model, audio_lines, subs_path);
+			println!("Done.")
 		}
 		TranscriptionType::RealTime => record_input(model),
 		TranscriptionType::Invalid => {

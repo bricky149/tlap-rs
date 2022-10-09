@@ -130,10 +130,11 @@ pub fn record_input(model :Model) {
 
                 match model.speech_to_text(new_samples) {
                     Ok(text) => {
-                        let sub = Subtitle::from(sub_count, past_ts, now_ts, text.clone());
+                        let sub = Subtitle::from(sub_count, past_ts, now_ts, text);
 
+                        // Use eprint!() as a progress indicator as per Rust docs
                         match sub.write_to(LIVE_SUBTITLES_PATH.into()) {
-                            Ok(()) => println!("{}", text),
+                            Ok(()) => eprint!("\r Written {} subtitle(s) so far...", sub_count),
                             Err(e) => eprintln!("Error writing subtitles: {}", e)
                         };
                     }
@@ -156,6 +157,7 @@ pub fn record_input(model :Model) {
 pub fn get_transcript(mut model :Model, sample_lines :Vec<[i16;64000]>,
     subs_path :String) {
 
+    let sub_total = sample_lines.len();
     let mut sub_count = 1;
     let mut timestamp = 0;
 
@@ -164,17 +166,21 @@ pub fn get_transcript(mut model :Model, sample_lines :Vec<[i16;64000]>,
             Ok(text) => {
                 let sub = Subtitle::from_line(sub_count, timestamp, text.clone());
 
+                // Use eprint!() as a progress indicator as per Rust docs
                 match sub.write_to(subs_path.clone()) {
-                    Ok(()) => println!("{}", text),
+                    Ok(()) => {
+                        eprint!("\r Processed subtitle {} of {}...",
+                            sub_count, sub_total);
+
+                        // Prepare for next iteration
+                        sub_count += 1;
+                        timestamp += 4000
+                    }
                     Err(e) => eprintln!("Error writing subtitles: {}", e)
                 };
             },
             Err(e) => eprintln!("Error running Coqui: {}", e)
         }
-
-        // Prepare for next iteration
-        sub_count += 1;
-        timestamp += 4000;
     }
 }
 

@@ -22,36 +22,37 @@ use std::io::{Result, Write};
 
 pub struct Subtitle {
     number: u16,
-    timestamp: String,
+    period: String,
     caption: String
 }
 
 impl Subtitle {
-    pub fn from(count :u16, start :u128, end :u128, body :String) -> Self {
+    pub fn from(number :u16, start :u128, end :u128, caption :String) -> Self {
         let (first_hour, first_minute, first_second, first_ms) = get_timestamp(start);
         let (second_hour, second_minute, second_second, second_ms) = get_timestamp(end);
 
-        Self {
-            number: count,
-            timestamp: format!("{:02}:{:02}:{:02},{:03} --> {:02}:{:02}:{:02},{:03}",
+        let period = format!("{:02}:{:02}:{:02},{:03} --> {:02}:{:02}:{:02},{:03}",
                         first_hour, first_minute, first_second, first_ms,
-                        second_hour, second_minute, second_second, second_ms),
-            caption: body
+                        second_hour, second_minute, second_second, second_ms);
+
+        Self {
+            number, period, caption
         }
     }
 
-    pub fn from_line(count :u16, timestamp :u128, line :String) -> Self {
+    pub fn from_line(number :u16, timestamp :u128, caption :String) -> Self {
         let mut ms = timestamp;
+
         let (first_hour, first_minute, first_second, first_ms) = get_timestamp(ms);
         ms += 4000;
         let (second_hour, second_minute, second_second, second_ms) = get_timestamp(ms);
 
-        Self {
-            number: count,
-            timestamp: format!("{:02}:{:02}:{:02},{:03} --> {:02}:{:02}:{:02},{:03}",
+        let period = format!("{:02}:{:02}:{:02},{:03} --> {:02}:{:02}:{:02},{:03}",
                         first_hour, first_minute, first_second, first_ms,
-                        second_hour, second_minute, second_second, second_ms),
-            caption: line
+                        second_hour, second_minute, second_second, second_ms);
+
+        Self {
+            number, period, caption
         }
     }
     
@@ -62,7 +63,7 @@ impl Subtitle {
             .open(path)?;
 
         writeln!(file, "{}", self.number)?;
-        writeln!(file, "{}", self.timestamp)?;
+        writeln!(file, "{}", self.period)?;
         writeln!(file, "{}\n", self.caption)?;
     
         Ok(())
