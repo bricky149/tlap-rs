@@ -22,6 +22,7 @@ extern crate cpal;
 extern crate hound;
 
 use std::env::args;
+use std::path::Path;
 
 mod speech;
 use speech::*;
@@ -34,66 +35,84 @@ tlap
 Transliterate Language for an Accessibility Purpose
 
 USAGE
-tlap {rt|realtime}
-tlap {pr|postrecord} [audiofilepath] [subtitlefilepath]
+tlap REALTIME
+tlap POSTRECORD FILE
 
-ARGUMENTS
-pr/postrecord, rt/realtime
-Determines whether to transliterate live or pre-recorded audio.
+REALTIME/RT
+Tells the program to transliterate live audio.
 
-audiofilepath
-Audio file to transliterate from. Used when 'pr/postrecord' is passed.
-If nothing is given, audio will be saved as 'recording.wav' in the current directory.
+POSTRECORD/PR
+Tells the program to transliterate recorded audio.
 
-subfilepath
-Subtitle file to write to. Used when 'pr/postrecord' is passed.
-If nothing is given, appends '.srt' to the passed audio file path.
+FILE
+Audio file to transliterate from. Used when 'postrecord' or 'pr' is passed.
 ";
 
 enum TranscriptionType {
 	Invalid,
-	PostRecord,
-	RealTime
+	RealTime,
+	PostRecord
 }
 
 fn main() {
-	let stt_type = match args().nth(1) {
+	let mut args = args();
+
+	// Second arg is speech-to-text type
+	// nth() is used to skip first arg (executable name)
+	let stt_type = match args.nth(1) {
 		Some(stt) => {
+			// Accept upper or lower case
 			match stt.as_str() {
-				"postrecord" => TranscriptionType::PostRecord,
-				"pr" => TranscriptionType::PostRecord,
-				"realtime" => TranscriptionType::RealTime,
-				"rt" => TranscriptionType::RealTime,
+				"postrecord" | "POSTRECORD" => TranscriptionType::PostRecord,
+				"pr" | "PR" => TranscriptionType::PostRecord,
+				"realtime" | "REALTIME" => TranscriptionType::RealTime,
+				"rt" | "RT" => TranscriptionType::RealTime,
 				_ => TranscriptionType::Invalid
 			}
 		}
 		None => TranscriptionType::Invalid
 	};
 
-	let audio_path = match args().nth(2) {
-		Some(path) => path,
-		None => "recording.wav".into()
-	};
-
-	let subs_path = match args().nth(3) {
-		Some(subs) => subs,
-		None => audio_path.clone() + ".srt"
+	// Use hard-coded path to save user from adding an extra arg
+	let model = match get_model("models/") {
+		Some(m) => m,
+		None => {
+			eprintln!("No Coqui model found in models directory.");
+			return
+		}
 	};
 
 	match stt_type {
 		TranscriptionType::PostRecord => {
+			// Third arg is audio file to read from
+			let file_name = match args.next() {
+				Some(a) => a,
+				None => {
+					eprintln!("No file given.");
+					println!("{}", USAGE);
+					return
+				}
+			};
+			let file_path = Path::new(&file_name);
+
+			let audio_path = if file_path.is_file() {
+				file_path.display().to_string()
+			} else {
+				eprintln!("Invalid file given.");
+				println!("{}", USAGE);
+				return
+			};
+			let subs_path = audio_path.clone() + ".srt";
+
 			let audio_buffer = get_audio_samples(audio_path);
 			let audio_lines = split_audio_lines(audio_buffer);
-			
-			let model = get_model();
+
             get_transcript(model, audio_lines, subs_path)
 		}
-		TranscriptionType::RealTime => {
-			let model = get_model();
-			record_input(model)
-		}
+		TranscriptionType::RealTime => record_input(model),
 		TranscriptionType::Invalid => {
-			eprintln!("Invalid speech-to-text type given.");
+			// Either a non-existent type or nothing was given
+			eprintln!("No valid speech-to-text type given.");
 			println!("{}", USAGE)
 		}
 	}

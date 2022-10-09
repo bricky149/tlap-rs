@@ -33,34 +33,38 @@ use std::time::{Duration, Instant};
 const FOUR_SECONDS :usize = 64000;
 // Use current directory for live transcriptions
 const LIVE_RECORDING_PATH :&str = "recording.wav";
-const LIVE_RECORDING_SUBS :&str = "recording.srt";
+const LIVE_SUBTITLES_PATH :&str = "recording.srt";
 // Model has been trained on this specific sample rate
 const SAMPLE_RATE :u32 = 16000;
 
-pub fn get_model() -> Model {
-    let dir_path = Path::new("models/");
+pub fn get_model(dir :&str) -> Option<Model> {
+    let dir_path = Path::new(dir);
     let mut model_path = String::new();
     let mut scorer_path = String::new();
 
-    for file in dir_path.read_dir().expect("Unable to read models dir.").flatten() {
-        let file_path = file.path();
+    for entry in dir_path.read_dir().expect("Unable to read models dir") {
+        if let Ok(entry) = entry {
+            let file_path = entry.path();
         
-        if file_path.is_file() {
-            if let Some(ext) = file_path.extension() {
-                if ext == "tflite" {
-                    model_path = file_path.display().to_string()
-                } else if ext == "scorer" {
-                    scorer_path = file_path.display().to_string()
+            if file_path.is_file() {
+                if let Some(ext) = file_path.extension() {
+                    if ext == "tflite" {
+                        model_path = file_path.display().to_string()
+                    } else if ext == "scorer" {
+                        scorer_path = file_path.display().to_string()
+                    }
                 }
             }
+        } else {
+            return None
         }
     }
 
-    let mut m = Model::new(model_path).expect("Unable to open model file.");
+    let mut m = Model::new(model_path).expect("Unable to open model file");
     if !scorer_path.is_empty() {
-        m.enable_external_scorer(scorer_path).expect("Unable to open scorer file.")
+        m.enable_external_scorer(scorer_path).expect("Unable to open scorer file")
     }
-    m
+    Some(m)
 }
 
 /*
@@ -70,13 +74,13 @@ pub fn get_model() -> Model {
 pub fn record_input(model :Model) {
     // Capture input device
     let host = cpal::default_host();
-    let device = host.default_input_device().expect("No input device available.");
+    let device = host.default_input_device().expect("No input device available");
     let config = get_input_config();
 
     // Prepare audio recording file for writing
     let spec = get_spec();
     let mut writer = hound::WavWriter::create(LIVE_RECORDING_PATH, spec)
-                        .expect("Unable to create audio recording.");
+                        .expect("Unable to create audio recording");
 
     let err_fn = |err|
         eprintln!("Input audio stream error: {}", err);
@@ -85,15 +89,15 @@ pub fn record_input(model :Model) {
         &config,
         move |data :&[i16], _: &_| {
             for &sample in data.iter() {
-                writer.write_sample(sample).expect("Unable to write sample.")
+                writer.write_sample(sample).expect("Unable to write sample")
             }
             // Write samples to file to avoid reading
             // nothing back when streaming
-            writer.flush().expect("Unable to flush samples to file.")
+            writer.flush().expect("Unable to flush samples to file")
         },
         err_fn,
-    ).expect("Unable to build input stream.");
-    stream.play().expect("Unable to play input stream.");
+    ).expect("Unable to build input stream");
+    stream.play().expect("Unable to play input stream");
 
     // Subtitle properties
     let start = Instant::now();
@@ -112,7 +116,7 @@ pub fn record_input(model :Model) {
         let thread_arc = model_arc.clone();
 
         thread::spawn(move || {
-            if let Ok(mut model) = thread_arc.lock() {
+            if let Ok(mut model) = thread_arc.try_lock() {
                 let samples = get_audio_samples(LIVE_RECORDING_PATH.into());
                 let samples_length = samples.len();
 
@@ -128,13 +132,15 @@ pub fn record_input(model :Model) {
                     Ok(text) => {
                         let sub = Subtitle::from(sub_count, past_ts, now_ts, text.clone());
 
-                        match Subtitle::write(sub, LIVE_RECORDING_SUBS.into()) {
+                        match sub.write_to(LIVE_SUBTITLES_PATH.into()) {
                             Ok(()) => println!("{}", text),
                             Err(e) => eprintln!("Error writing subtitles: {}", e)
                         };
                     }
                     Err(e) => eprintln!("Error running Coqui: {}", e)
                 }
+            } else {
+                eprintln!("Unable to use speech model, trying again in four seconds.")
             }
         });
 
@@ -158,7 +164,7 @@ pub fn get_transcript(mut model :Model, sample_lines :Vec<[i16;64000]>,
             Ok(text) => {
                 let sub = Subtitle::from_line(sub_count, timestamp, text.clone());
 
-                match Subtitle::write(sub, subs_path.clone()) {
+                match sub.write_to(subs_path.clone()) {
                     Ok(()) => println!("{}", text),
                     Err(e) => eprintln!("Error writing subtitles: {}", e)
                 };
@@ -178,9 +184,9 @@ pub fn get_transcript(mut model :Model, sample_lines :Vec<[i16;64000]>,
 */
 pub fn get_audio_samples(audio_path :String) -> Vec<i16> {
     let mut reader = hound::WavReader::open(audio_path)
-                                .expect("Unable to open audio file.");
+                                .expect("Invalid Wave file");
     let samples :Vec<i16> = reader.samples()
-                                .map(|s| s.expect("Unable to read sample."))
+                                .map(|s| s.expect("Unable to read sample"))
                                 .collect();
     samples
 }
@@ -199,6 +205,7 @@ pub fn split_audio_lines(audio_buffer :Vec<i16>) -> Vec<[i16;64000]> {
         let remaining_length = sample_buffer.len();
 
         if remaining_length >= FOUR_SECONDS {
+            // We are interested in the last four seconds' worth of samples
             current_samples = sample_buffer.split_at(FOUR_SECONDS).0;
             samples_to_process = sample_buffer.split_at(FOUR_SECONDS).1;
             sample_buffer = samples_to_process;

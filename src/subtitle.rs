@@ -55,7 +55,7 @@ impl Subtitle {
         }
     }
     
-    pub fn write(self, path :String) -> Result<()> {
+    pub fn write_to(self, path :String) -> Result<()> {
         let mut file = OpenOptions::new()
             .append(true)
             .create(true)
