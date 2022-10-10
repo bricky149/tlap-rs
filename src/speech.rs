@@ -23,7 +23,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound::{SampleFormat, WavSpec};
 
 use crate::Subtitle;
-use crate::enums::*;
+use crate::enums::TlapError;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -74,7 +74,7 @@ pub fn get_model(dir :&str) -> Option<Model> {
 }
 
 /*
-    This was inspired by code from Tyler Anton (https://github.com/tylerdotdev)
+    This was adapted from code written by Tyler Anton (https://github.com/tylerdotdev)
     https://stackoverflow.com/questions/67105792/getting-blank-results-from-deepspeech-with-portaudio-in-rust
 */
 pub fn record_input(model :Model) -> Result<(), TlapError> {
@@ -93,7 +93,7 @@ pub fn record_input(model :Model) -> Result<(), TlapError> {
         Ok(w) => w,
         Err(_e) => return Err(TlapError::CreateRecordingFailed)
     };
-   
+
     let err_fn = |err| eprintln!("{}", err);
 
     let stream = device.build_input_stream(
@@ -129,11 +129,13 @@ pub fn record_input(model :Model) -> Result<(), TlapError> {
         let now_ts = start.elapsed().as_millis();
         
         thread::spawn(move ||
-            transcribe_live(model_arc, sub_num, now_ts)
+            if let Err(e) = transcribe_live(model_arc, sub_num, now_ts) {
+                eprintln!("{:?}", e)
+            } else {
+                // Use eprint!() as a progress indicator as per Rust docs
+                eprint!("\r Written {} subtitles so far...", sub_num)
+            }
         );
-
-        // Use eprint!() as a progress indicator as per Rust docs
-        eprint!("\r Written {} subtitles so far...", sub_num);
 
         // Prepare for next iteration
         sub_num += 1
@@ -142,7 +144,7 @@ pub fn record_input(model :Model) -> Result<(), TlapError> {
     Err(TlapError::WriteRecordingFailed)
 }
 
-fn transcribe_live(model_arc :Arc<Mutex<Model>>, sub_num :u16, ts :u128)
+fn transcribe_live(model_arc :Arc<Mutex<Model>>, sub_num :usize, ts :u128)
     -> Result<(), TlapError> {
 
     if let Some(s) = get_audio_samples(LIVE_RECORDING_PATH.into()) {
@@ -207,8 +209,8 @@ pub fn transcribe(mut model :Model, sample_lines :Vec<[i16;FOUR_SECONDS]>,
 }
 
 /*
-	This code was inspired by the RustAudio example client
-	https://github.com/RustAudio/deepspeech-rs/blob/master/examples/client_simple.rs
+	This was adapted from the RustAudio example client
+	https://github.com/RustAudio/deepspeech-rs/
 */
 pub fn get_audio_samples(audio_path :String) -> Option<Vec<i16>> {
     if let Ok(mut r) = hound::WavReader::open(audio_path) {
@@ -274,7 +276,7 @@ pub fn split_audio_lines(audio_buffer :Vec<i16>)
 fn get_input_config() -> StreamConfig {
     StreamConfig {
         channels: 1,
-        sample_rate: SampleRate(16000),
+        sample_rate: SampleRate(SAMPLE_RATE),
         buffer_size: BufferSize::Fixed(1024)
     }
 }
