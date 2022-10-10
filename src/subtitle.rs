@@ -27,25 +27,12 @@ pub struct Subtitle {
 }
 
 impl Subtitle {
-    pub fn from(number :u16, start :u128, end :u128, caption :String) -> Self {
-        let (first_hour, first_minute, first_second, first_ms) = get_timestamp(start);
-        let (second_hour, second_minute, second_second, second_ms) = get_timestamp(end);
-
-        let period = format!("{:02}:{:02}:{:02},{:03} --> {:02}:{:02}:{:02},{:03}",
-                        first_hour, first_minute, first_second, first_ms,
-                        second_hour, second_minute, second_second, second_ms);
-
-        Self {
-            number, period, caption
-        }
-    }
-
-    pub fn from_line(number :u16, timestamp :u128, caption :String) -> Self {
+    pub fn from(number :u16, timestamp :u128, caption :String) -> Self {
         let mut ms = timestamp;
 
-        let (first_hour, first_minute, first_second, first_ms) = get_timestamp(ms);
-        ms += 4000;
         let (second_hour, second_minute, second_second, second_ms) = get_timestamp(ms);
+        ms -= 4000;
+        let (first_hour, first_minute, first_second, first_ms) = get_timestamp(ms);
 
         let period = format!("{:02}:{:02}:{:02},{:03} --> {:02}:{:02}:{:02},{:03}",
                         first_hour, first_minute, first_second, first_ms,

@@ -23,6 +23,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound::{SampleFormat, WavSpec};
 
 use crate::Subtitle;
+use crate::enums::*;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -42,11 +43,11 @@ pub fn get_model(dir :&str) -> Option<Model> {
     let mut model_path = String::new();
     let mut scorer_path = String::new();
 
-    for entry in dir_path.read_dir().expect("Unable to read models dir") {
-        if let Ok(entry) = entry {
-            let file_path = entry.path();
-        
-            if file_path.is_file() {
+    if let Ok(rd) = dir_path.read_dir() {
+        for entry in rd {
+            if let Ok(entry) = entry {
+                let file_path = entry.path();
+
                 if let Some(ext) = file_path.extension() {
                     if ext == "tflite" {
                         model_path = file_path.display().to_string()
@@ -54,151 +55,178 @@ pub fn get_model(dir :&str) -> Option<Model> {
                         scorer_path = file_path.display().to_string()
                     }
                 }
+            } else {
+                continue
             }
-        } else {
-            return None
         }
+    } else {
+        return None
     }
 
-    let mut m = Model::new(model_path).expect("Unable to open model file");
-    if !scorer_path.is_empty() {
-        m.enable_external_scorer(scorer_path).expect("Unable to open scorer file")
+    if let Ok(mut m) = Model::new(model_path) {
+        if let Err(e) = m.enable_external_scorer(scorer_path) {
+            eprintln!("Continuing without scorer due to: {}", e)
+        }
+        Some(m)
+    } else {
+        None
     }
-    Some(m)
 }
 
 /*
     This was inspired by code from Tyler Anton (https://github.com/tylerdotdev)
     https://stackoverflow.com/questions/67105792/getting-blank-results-from-deepspeech-with-portaudio-in-rust
 */
-pub fn record_input(model :Model) {
+pub fn record_input(model :Model) -> Result<(), TlapError> {
     // Capture input device
     let host = cpal::default_host();
-    let device = host.default_input_device().expect("No input device available");
+    let device = match host.default_input_device() {
+        Some(d) => d,
+        None => return Err(TlapError::NoInputDevice)
+    };
+
     let config = get_input_config();
 
     // Prepare audio recording file for writing
     let spec = get_spec();
-    let mut writer = hound::WavWriter::create(LIVE_RECORDING_PATH, spec)
-                        .expect("Unable to create audio recording");
-
-    let err_fn = |err|
-        eprintln!("Input audio stream error: {}", err);
+    let mut writer = match hound::WavWriter::create(LIVE_RECORDING_PATH, spec) {
+        Ok(w) => w,
+        Err(_e) => return Err(TlapError::CreateRecordingFailed)
+    };
+   
+    let err_fn = |err| eprintln!("{}", err);
 
     let stream = device.build_input_stream(
         &config,
         move |data :&[i16], _: &_| {
+            // err_fn called if unwrap fails
             for &sample in data.iter() {
-                writer.write_sample(sample).expect("Unable to write sample")
+                writer.write_sample(sample).unwrap_or_default()
             }
             // Write samples to file to avoid reading
             // nothing back when streaming
-            writer.flush().expect("Unable to flush samples to file")
+            writer.flush().unwrap_or_default()
         },
         err_fn,
-    ).expect("Unable to build input stream");
-    stream.play().expect("Unable to play input stream");
+    );
+    let stream = match stream {
+        Ok(s) => s,
+        Err(_e) => return Err(TlapError::NoInputStream)
+    };
 
     // Subtitle properties
     let start = Instant::now();
-    let mut sub_count = 1;
-    let mut past_ts = 0;
+    let mut sub_num = 1;
 
     // Allows model to be used across threads
-    let model_mutex = Mutex::new(model);
-    let model_arc = Arc::new(model_mutex);
+    let model = Arc::new(Mutex::new(model));
 
-    loop {
+    while let Ok(()) = stream.play() {
         // Wait for enough input to process
         thread::sleep(Duration::from_secs(4));
 
+        let model_arc = model.clone();
         let now_ts = start.elapsed().as_millis();
-        let thread_arc = model_arc.clone();
+        
+        thread::spawn(move ||
+            transcribe_live(model_arc, sub_num, now_ts)
+        );
 
-        thread::spawn(move || {
-            if let Ok(mut model) = thread_arc.try_lock() {
-                let samples = get_audio_samples(LIVE_RECORDING_PATH.into());
-                let samples_length = samples.len();
-
-                let new_samples = if samples_length > FOUR_SECONDS {
-                    let cursor = samples_length - FOUR_SECONDS;
-                    samples.split_at(cursor).1
-                } else {
-                    // First loop falls short of 64K samples
-                    samples.split_at(0).1
-                };
-
-                match model.speech_to_text(new_samples) {
-                    Ok(text) => {
-                        let sub = Subtitle::from(sub_count, past_ts, now_ts, text);
-
-                        // Use eprint!() as a progress indicator as per Rust docs
-                        match sub.write_to(LIVE_SUBTITLES_PATH.into()) {
-                            Ok(()) => eprint!("\r Written {} subtitle(s) so far...", sub_count),
-                            Err(e) => eprintln!("Error writing subtitles: {}", e)
-                        };
-                    }
-                    Err(e) => eprintln!("Error running Coqui: {}", e)
-                }
-            } else {
-                eprintln!("Unable to use speech model, trying again in four seconds.")
-            }
-        });
+        // Use eprint!() as a progress indicator as per Rust docs
+        eprint!("\r Written {} subtitles so far...", sub_num);
 
         // Prepare for next iteration
-        sub_count += 1;
-        past_ts = now_ts
+        sub_num += 1
     }
 
-    // Unreachable for now
-    //drop(stream)
+    Err(TlapError::WriteRecordingFailed)
 }
 
-pub fn get_transcript(mut model :Model, sample_lines :Vec<[i16;64000]>,
-    subs_path :String) {
+fn transcribe_live(model_arc :Arc<Mutex<Model>>, sub_num :u16, ts :u128)
+    -> Result<(), TlapError> {
+
+    if let Some(s) = get_audio_samples(LIVE_RECORDING_PATH.into()) {
+        let samples_length = s.len();
+
+        let new_samples = if samples_length > FOUR_SECONDS {
+            let cursor = samples_length - FOUR_SECONDS;
+            s.split_at(cursor).1
+        } else {
+            // First loop falls short of 64K samples
+            s.split_at(0).1
+        };
+
+        if let Ok(mut m) = model_arc.try_lock() {
+            if let Ok(t) = m.speech_to_text(new_samples) {
+                let sub = Subtitle::from(sub_num, ts, t);
+
+                if let Err(_e) = sub.write_to(LIVE_SUBTITLES_PATH.into()) {
+                    return Err(TlapError::WriteSubtitlesFailed)
+                }
+            } else {
+                return Err(TlapError::TranscriptionFailed)
+            }
+        } else {
+            return Err(TlapError::ModelLockFailed)
+        }
+    } else {
+        return Err(TlapError::ReadFileFailed)
+    }
+
+    Ok(())
+}
+
+pub fn transcribe(mut model :Model, sample_lines :Vec<[i16;FOUR_SECONDS]>,
+    subs_path :String) -> Result<(), TlapError> {
 
     let sub_total = sample_lines.len();
     let mut sub_count = 1;
-    let mut timestamp = 0;
+    let mut timestamp = 4000;
 
     for line in sample_lines {
-        match model.speech_to_text(&line) {
-            Ok(text) => {
-                let sub = Subtitle::from_line(sub_count, timestamp, text.clone());
+        if let Ok(t) = model.speech_to_text(&line) {
+            let sub = Subtitle::from(sub_count, timestamp, t);
 
-                // Use eprint!() as a progress indicator as per Rust docs
-                match sub.write_to(subs_path.clone()) {
-                    Ok(()) => {
-                        eprint!("\r Processed subtitle {} of {}...",
-                            sub_count, sub_total);
+            // Use eprint!() as a progress indicator as per Rust docs
+            if let Ok(()) = sub.write_to(subs_path.clone()) {
+                eprint!("\r Processed subtitle {} of {}...",
+                    sub_count, sub_total);
 
-                        // Prepare for next iteration
-                        sub_count += 1;
-                        timestamp += 4000
-                    }
-                    Err(e) => eprintln!("Error writing subtitles: {}", e)
-                };
-            },
-            Err(e) => eprintln!("Error running Coqui: {}", e)
+                // Prepare for next iteration
+                sub_count += 1;
+                timestamp += 4000
+            } else {
+                return Err(TlapError::WriteSubtitlesFailed)
+            }
+        } else {
+            return Err(TlapError::TranscriptionFailed)
         }
     }
+
+    Ok(())
 }
 
 /*
 	This code was inspired by the RustAudio example client
 	https://github.com/RustAudio/deepspeech-rs/blob/master/examples/client_simple.rs
 */
-pub fn get_audio_samples(audio_path :String) -> Vec<i16> {
-    let mut reader = hound::WavReader::open(audio_path)
-                                .expect("Invalid Wave file");
-    let samples :Vec<i16> = reader.samples()
-                                .map(|s| s.expect("Unable to read sample"))
-                                .collect();
-    samples
+pub fn get_audio_samples(audio_path :String) -> Option<Vec<i16>> {
+    if let Ok(mut r) = hound::WavReader::open(audio_path) {
+        // unwrap_or_default or unwrap_or(0) will quietly
+        // replace malformed samples with silence
+        let samples :Vec<i16> = r.samples()
+            .map(|s| s.unwrap_or_default())
+            .collect();
+        Some(samples)
+    } else {
+        None
+    }
 }
 
-pub fn split_audio_lines(audio_buffer :Vec<i16>) -> Vec<[i16;64000]> {
-    let mut audio_lines :Vec<[i16;64000]> = Vec::new();
+pub fn split_audio_lines(audio_buffer :Vec<i16>)
+    -> Result<Vec<[i16;FOUR_SECONDS]>, TlapError> {
+
+    let mut audio_lines :Vec<[i16;FOUR_SECONDS]> = Vec::new();
 
     let audio_length = audio_buffer.len();
     let total_lines = audio_length / FOUR_SECONDS;
@@ -216,10 +244,11 @@ pub fn split_audio_lines(audio_buffer :Vec<i16>) -> Vec<[i16;64000]> {
             samples_to_process = sample_buffer.split_at(FOUR_SECONDS).1;
             sample_buffer = samples_to_process;
 
-            match current_samples.try_into() {
-                Ok(l) => audio_lines.push(l),
-                Err(e) => eprintln!("{}", e)
-            };
+            if let Ok(l) = current_samples.try_into() {
+                audio_lines.push(l)
+            } else {
+                return Err(TlapError::AudioSplitFailed)
+            }
         } else {
             // Put remaining chunks in a vector and fill the empty
             // space with zeroes so it is the right size
@@ -231,14 +260,15 @@ pub fn split_audio_lines(audio_buffer :Vec<i16>) -> Vec<[i16;64000]> {
                 last_samples.push(*s)
             }
 
-            match last_samples.try_into() {
-                Ok(l) => audio_lines.push(l),
-                Err(e) => eprintln!("{:?}", e)
-            };
-        };
+            if let Ok(l) = last_samples.try_into() {
+                audio_lines.push(l)
+            } else {
+                return Err(TlapError::AudioSplitFailed)
+            }
+        }
     }
 
-    audio_lines
+    Ok(audio_lines)
 }
 
 fn get_input_config() -> StreamConfig {

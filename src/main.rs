@@ -22,12 +22,13 @@ extern crate cpal;
 extern crate hound;
 
 use std::env::args;
-use std::path::Path;
 
+mod enums;
 mod speech;
-use speech::*;
-
 mod subtitle;
+
+use enums::*;
+use speech::*;
 use subtitle::*;
 
 const USAGE :&str = "
@@ -47,12 +48,6 @@ Tells the program to transliterate recorded audio.
 FILE
 Audio file to transliterate from. Used when 'postrecord' or 'pr' is passed.
 ";
-
-enum TranscriptionType {
-	Invalid,
-	RealTime,
-	PostRecord
-}
 
 fn main() {
 	let mut args = args();
@@ -85,32 +80,43 @@ fn main() {
 	match stt_type {
 		TranscriptionType::PostRecord => {
 			// Third arg is audio file to read from
-			let file_name = match args.next() {
-				Some(a) => a,
+			let audio_path = match args.next() {
+				Some(p) => p,
 				None => {
 					eprintln!("No file given.");
 					println!("{}", USAGE);
 					return
 				}
 			};
-			let file_path = Path::new(&file_name);
+			let subs_path = audio_path.replace(".wav", ".srt");
 
-			let audio_path = if file_path.is_file() {
-				file_path.display().to_string()
-			} else {
-				eprintln!("Invalid file given.");
-				println!("{}", USAGE);
-				return
+			let audio_buffer = match get_audio_samples(audio_path) {
+				Some(b) => b,
+				None => {
+					eprintln!("No audio samples were read.");
+					return
+				}
 			};
-			let subs_path = audio_path.clone() + ".srt";
 
-			let audio_buffer = get_audio_samples(audio_path);
-			let audio_lines = split_audio_lines(audio_buffer);
+			let audio_lines = match split_audio_lines(audio_buffer) {
+				Ok(l) => l,
+				Err(e) => {
+					eprintln!("{:?}", e);
+					return
+				}
+			};
 
-            get_transcript(model, audio_lines, subs_path);
-			println!("Done.")
+			match transcribe(model, audio_lines, subs_path) {
+				Ok(()) => println!("done."),
+				Err(e) => eprintln!("{:?}", e)
+			}
 		}
-		TranscriptionType::RealTime => record_input(model),
+		TranscriptionType::RealTime => {
+			match record_input(model) {
+				Ok(()) => println!("recording stopped."),
+				Err(e) => eprintln!("{:?}", e)
+			}
+		}
 		TranscriptionType::Invalid => {
 			// Either a non-existent type or nothing was given
 			eprintln!("No valid speech-to-text type given.");
