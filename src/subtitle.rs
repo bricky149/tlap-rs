@@ -17,69 +17,101 @@
     License along with tlap. If not, see <https://www.gnu.org/licenses/>.
 */
 
+/*
+    This was partly copied from subtitles-rs, written by Eric Kidd
+    https://github.com/emk/subtitles-rs/
+*/
+
+use std::fmt;
 use std::fs::OpenOptions;
 use std::io::{Result, Write};
 
 pub struct Subtitle {
-    number: u16,
-    period: String,
-    caption: String
+    index :usize,
+    period :Period,
+    caption :String
 }
 
 impl Subtitle {
-    pub fn from(number :u16, timestamp :u128, caption :String) -> Self {
-        let mut ms = timestamp;
-
-        let (second_hour, second_minute, second_second, second_ms) = get_timestamp(ms);
-        ms -= 4000;
-        let (first_hour, first_minute, first_second, first_ms) = get_timestamp(ms);
-
-        let period = format!("{:02}:{:02}:{:02},{:03} --> {:02}:{:02}:{:02},{:03}",
-                        first_hour, first_minute, first_second, first_ms,
-                        second_hour, second_minute, second_second, second_ms);
+    pub fn from(index :usize, ts :u128, caption :String) -> Self {
+        let period = Period::from(ts);
 
         Self {
-            number, period, caption
+            index, period, caption
         }
     }
-    
+
     pub fn write_to(self, path :String) -> Result<()> {
         let mut file = OpenOptions::new()
             .append(true)
             .create(true)
             .open(path)?;
 
-        writeln!(file, "{}", self.number)?;
-        writeln!(file, "{}", self.period)?;
-        writeln!(file, "{}\n", self.caption)?;
-    
+        writeln!(file, "{}\n{} --> {}\n{}\n",
+            self.index,
+            format_time(self.period.begin),
+            format_time(self.period.end),
+            self.caption
+        )?;
+
         Ok(())
     }
 }
 
-fn get_timestamp(timestamp :u128) -> (u128, u128, u128, u128) {
-    let mut ms = timestamp;
+trait Display {
+    fn to_string(&self) -> String;
+}
 
-    let mut seconds =  if ms > 999 {
-        ms / 1000
-    } else {
-        0
-    };
-    ms -= 1000 * seconds;
+impl fmt::Display for Subtitle {
+    fn fmt(&self, fmtr :&mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(fmtr,
+            "{}\n{} --> {}\n{}\n",
+            self.index,
+            format_time(self.period.begin),
+            format_time(self.period.end),
+            self.caption
+        )
+    }
+}
 
-    let mut minutes = if seconds > 59 {
-        seconds / 60
-    } else {
-        0
-    };
-    seconds -= 60 * minutes;
+struct Period {
+    begin :u128,
+    end :u128
+}
 
-    let hours = if minutes > 59 {
-        minutes / 60
-    } else {
-        0
-    };
-    minutes -= 60 * hours;
+impl Period {
+    fn from(end :u128) -> Self {
+        let mut ms = end;
+        ms -= 4000;
+        let begin = ms;
 
-    (hours, minutes, seconds, ms)
+        Self {
+            begin, end
+        }
+    }
+}
+
+fn format_time(time: u128) -> String {
+    let (h, rem) = (time / 3600000, time % 3600000);
+    let (m, rem) = (rem / 60000, rem % 60000);
+    let (s, ms) = (rem / 1000, rem % 1000);
+
+    format!("{:02}:{:02}:{:02},{:03}", h, m, s, ms)
+}
+
+#[cfg(test)]
+mod test {
+    use crate::Subtitle;
+
+    #[test]
+    fn subtitle_to_string() {
+        let text = "something something capitalism bad".into();
+
+        let sub = Subtitle::from(1, 64064, text);
+
+        assert_eq!(
+            "1\n00:01:00,064 --> 00:01:04,064\nsomething something capitalism bad\n",
+            sub.to_string()
+        )
+    }
 }
