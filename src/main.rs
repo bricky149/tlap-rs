@@ -70,9 +70,9 @@ fn main() {
 
 	// Use hard-coded path to save user from adding an extra arg
 	let model = match get_model("models/") {
-		Some(m) => m,
-		None => {
-			eprintln!("No Coqui model found in models directory.");
+		Ok(m) => m,
+		Err(e) => {
+			eprintln!("{:?}", e);
 			return
 		}
 	};
@@ -91,9 +91,9 @@ fn main() {
 			let subs_path = audio_path.replace(".wav", ".srt");
 
 			let audio_buffer = match get_audio_samples(audio_path) {
-				Some(b) => b,
-				None => {
-					eprintln!("No audio samples were read.");
+				Ok(b) => b,
+				Err(e) => {
+					eprintln!("{:?}", e);
 					return
 				}
 			};
@@ -112,10 +112,15 @@ fn main() {
 			}
 		}
 		TranscriptionType::RealTime => {
-			match record_input(model) {
-				Ok(()) => println!("recording stopped."),
-				Err(e) => eprintln!("{:?}", e)
-			}
+			let stream = match get_input_stream() {
+				Ok(s) => s,
+				Err(e) => {
+					eprintln!("{:?}", e);
+					return
+				}
+			};
+
+			record_input(model, stream)
 		}
 		TranscriptionType::Invalid => {
 			// Either a non-existent type or nothing was given

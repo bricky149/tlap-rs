@@ -4,10 +4,11 @@ pub enum TlapError {
 	NoInputDevice,
 	CreateRecordingFailed,
 	NoInputStream,
+	NoSpeechModel,
+	InvalidSpeechModel,
 	ReadFileFailed,
 	ModelLockFailed,
 	TranscriptionFailed,
-	WriteRecordingFailed,
 	WriteSubtitlesFailed
 }
 
