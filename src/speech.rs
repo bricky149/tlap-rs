@@ -213,7 +213,7 @@ pub fn transcribe(mut model :Model, sample_lines :Vec<[i16;FOUR_SECONDS]>,
 
 /*
 	This was adapted from the RustAudio example client
-	https://github.com/RustAudio/deepspeech-rs/
+	https://github.com/RustAudio/deepspeech-rs
 */
 pub fn get_audio_samples(audio_path :String) -> Result<Vec<i16>, TlapError> {
     if let Ok(mut r) = WavReader::open(audio_path) {
