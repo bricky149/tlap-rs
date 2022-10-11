@@ -103,6 +103,9 @@ pub fn get_input_stream() -> Result<Stream, TlapError> {
             for &sample in data.iter() {
                 writer.write_sample(sample).unwrap_or_default()
             }
+            // Write samples to file to avoid reading
+            // nothing back when streaming
+            writer.flush().unwrap_or_default()
         },
         err_fn,
     );
@@ -277,7 +280,7 @@ fn get_input_config() -> StreamConfig {
     StreamConfig {
         channels :1,
         sample_rate :SampleRate(SAMPLE_RATE),
-        buffer_size :BufferSize::Fixed(256)
+        buffer_size :BufferSize::Default
     }
 }
 
