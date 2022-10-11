@@ -1,5 +1,11 @@
 # Version History
 
+## v0.5.0 (2022-10-11)
+* Add a test for subtitle output
+* Change Options to Results as all data is needed during execution
+* Reduce chance of panicking by covering for every Err() case
+* Miscellaneous SemVer-breaking changes, despite no new features
+
 ## v0.4.0 (2022-10-07)
 * Major codebase rewrite
 	* Migrated from deprecated DeepSpeech dependencies to [coqui-stt](https://github.com/tazz4843/coqui-stt)
