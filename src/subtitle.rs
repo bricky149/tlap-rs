@@ -107,10 +107,10 @@ mod test {
     fn subtitle_to_string() {
         let text = "something something capitalism bad".into();
 
-        let sub = Subtitle::from(1, 64064, text);
+        let sub = Subtitle::from(1, 123123, text);
 
         assert_eq!(
-            "1\n00:01:00,064 --> 00:01:04,064\nsomething something capitalism bad\n",
+            "1\n00:01:59,123 --> 00:02:03,123\nsomething something capitalism bad\n",
             sub.to_string()
         )
     }
