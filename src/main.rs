@@ -27,17 +27,20 @@ mod enums;
 mod speech;
 mod subtitle;
 
-use enums::*;
+use enums::TranscriptionType;
 use speech::*;
-use subtitle::*;
+use subtitle::Subtitle;
 
 const USAGE :&str = "
 tlap
 Transliterate Language for an Accessibility Purpose
 
 USAGE
+
 tlap REALTIME
 tlap POSTRECORD FILE
+
+ARGUMENTS
 
 REALTIME/RT
 Tells the program to transliterate live audio.
@@ -90,7 +93,7 @@ fn main() {
 			};
 			let subs_path = audio_path.replace(".wav", ".srt");
 
-			let audio_buffer = match get_audio_samples(audio_path) {
+			let audio_buffer = match get_all_samples(audio_path) {
 				Ok(b) => b,
 				Err(e) => {
 					eprintln!("{:?}", e);

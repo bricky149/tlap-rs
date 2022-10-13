@@ -67,6 +67,7 @@ pub fn get_model(dir :&str) -> Result<Model, TlapError> {
         if let Err(e) = m.enable_external_scorer(scorer_path) {
             eprintln!("Continuing without scorer due to: {}", e)
         }
+
         Ok(m)
     } else {
         Err(TlapError::InvalidSpeechModel)
@@ -131,7 +132,8 @@ pub fn record_input(model :Model, stream :Stream) {
 
         let model = model.clone();
         let now_ts = start.elapsed().as_millis();
-        
+
+        // This will only spawn as many threads as there are CPU cores
         thread::spawn(move ||
             if let Err(e) = transcribe_live(model, sub_num, now_ts) {
                 eprintln!("{:?}", e)
@@ -149,21 +151,11 @@ pub fn record_input(model :Model, stream :Stream) {
 fn transcribe_live(model :Arc<Mutex<Model>>, sub_num :usize, ts :u128)
     -> Result<(), TlapError> {
 
-    match get_audio_samples(LIVE_RECORDING_PATH.into()) {
+    match get_new_samples(LIVE_RECORDING_PATH.into()) {
         Ok(s) => {
-            let samples_length = s.len();
-
-            let new_samples = if samples_length > FOUR_SECONDS {
-                let cursor = samples_length - FOUR_SECONDS;
-                s.split_at(cursor).1
-            } else {
-                // First loop falls short of 64K samples
-                s.split_at(0).1
-            };
-    
             if let Ok(mut m) = model.try_lock() {
-                if let Ok(t) = m.speech_to_text(new_samples) {
-                    let sub = Subtitle::from(sub_num, ts, t);
+                if let Ok(t) = m.speech_to_text(&s) {
+                    let sub = Subtitle::new(sub_num, ts, t);
     
                     if let Err(_e) = sub.write_to(LIVE_SUBTITLES_PATH.into()) {
                         return Err(TlapError::WriteSubtitlesFailed)
@@ -190,10 +182,10 @@ pub fn transcribe(mut model :Model, sample_lines :Vec<[i16;FOUR_SECONDS]>,
 
     for line in sample_lines {
         if let Ok(t) = model.speech_to_text(&line) {
-            let sub = Subtitle::from(sub_count, timestamp, t);
+            let sub = Subtitle::new(sub_count, timestamp, t);
 
             // Use eprint!() as a progress indicator as per Rust docs
-            if let Ok(()) = sub.write_to(subs_path.clone()) {
+            if sub.write_to(subs_path.clone()).is_ok() {
                 eprint!("\r Processed subtitle {} of {}...",
                     sub_count, sub_total);
 
@@ -215,7 +207,7 @@ pub fn transcribe(mut model :Model, sample_lines :Vec<[i16;FOUR_SECONDS]>,
 	This was adapted from the RustAudio example client
 	https://github.com/RustAudio/deepspeech-rs
 */
-pub fn get_audio_samples(audio_path :String) -> Result<Vec<i16>, TlapError> {
+pub fn get_all_samples(audio_path :String) -> Result<Vec<i16>, TlapError> {
     if let Ok(mut r) = WavReader::open(audio_path) {
         // unwrap_or_default or unwrap_or(0) will quietly
         // replace malformed samples with silence
@@ -223,6 +215,29 @@ pub fn get_audio_samples(audio_path :String) -> Result<Vec<i16>, TlapError> {
             .map(|s| s.unwrap_or_default())
             .collect();
         Ok(samples)
+    } else {
+        Err(TlapError::ReadFileFailed)
+    }
+}
+
+pub fn get_new_samples(audio_path :String) -> Result<Vec<i16>, TlapError> {
+    if let Ok(mut r) = WavReader::open(audio_path) {
+        // unwrap_or_default or unwrap_or(0) will quietly
+        // replace malformed samples with silence
+        let cursor = if r.duration() >= FOUR_SECONDS as u32 {
+            r.duration() - FOUR_SECONDS as u32
+        } else {
+            0
+        };
+
+        if let Ok(()) = r.seek(cursor) {
+            let samples :Vec<i16> = r.samples()
+                .map(|s| s.unwrap_or_default())
+                .collect();
+            Ok(samples)
+        } else {
+            Err(TlapError::ReadFileFailed)
+        }
     } else {
         Err(TlapError::ReadFileFailed)
     }
