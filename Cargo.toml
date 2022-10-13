@@ -11,6 +11,7 @@ edition = "2021"
 coqui-stt = "*"
 cpal = "*"
 hound = "*"
+threadpool = "*"
 
 [profile.release]
 lto = true

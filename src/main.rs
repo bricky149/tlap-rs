@@ -20,6 +20,7 @@
 extern crate coqui_stt;
 extern crate cpal;
 extern crate hound;
+extern crate threadpool;
 
 use std::env::args;
 
@@ -27,17 +28,20 @@ mod enums;
 mod speech;
 mod subtitle;
 
-use enums::*;
+use enums::TranscriptionType;
 use speech::*;
-use subtitle::*;
+use subtitle::Subtitle;
 
 const USAGE :&str = "
 tlap
 Transliterate Language for an Accessibility Purpose
 
 USAGE
+
 tlap REALTIME
 tlap POSTRECORD FILE
+
+ARGUMENTS
 
 REALTIME/RT
 Tells the program to transliterate live audio.

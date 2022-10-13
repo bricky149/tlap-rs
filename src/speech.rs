@@ -21,6 +21,7 @@ use coqui_stt::Model;
 use cpal::{BufferSize, SampleRate, Stream, StreamConfig};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound::{SampleFormat, WavReader, WavSpec, WavWriter};
+use threadpool::ThreadPool;
 
 use crate::Subtitle;
 use crate::enums::TlapError;
@@ -118,6 +119,11 @@ pub fn get_input_stream() -> Result<Stream, TlapError> {
 }
 
 pub fn record_input(model :Model, stream :Stream) {
+    // Only have a single transcription running at a time
+    // We prefer long-running threads soft-locking over
+    // failed model mutex locks and skipping lines
+    let pool = ThreadPool::new(1);
+
     // Allows model to be used across threads
     let model = Arc::new(Mutex::new(model));
 
@@ -131,8 +137,9 @@ pub fn record_input(model :Model, stream :Stream) {
 
         let model = model.clone();
         let now_ts = start.elapsed().as_millis();
-        
-        thread::spawn(move ||
+
+        // This will only spawn as many threads as there are CPU cores
+        pool.execute(move ||
             if let Err(e) = transcribe_live(model, sub_num, now_ts) {
                 eprintln!("{:?}", e)
             } else {
