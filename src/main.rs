@@ -20,7 +20,6 @@
 extern crate coqui_stt;
 extern crate cpal;
 extern crate hound;
-extern crate threadpool;
 
 use std::env::args;
 
@@ -94,7 +93,7 @@ fn main() {
 			};
 			let subs_path = audio_path.replace(".wav", ".srt");
 
-			let audio_buffer = match get_audio_samples(audio_path) {
+			let audio_buffer = match get_all_samples(audio_path) {
 				Ok(b) => b,
 				Err(e) => {
 					eprintln!("{:?}", e);

@@ -19,12 +19,14 @@
 
 /*
     This was partly copied from subtitles-rs, written by Eric Kidd
-    https://github.com/emk/subtitles-rs/
+    https://github.com/emk/subtitles-rs
 */
 
-use std::fmt;
 use std::fs::OpenOptions;
 use std::io::{Result, Write};
+
+#[cfg(test)]
+use std::fmt;
 
 pub struct Subtitle {
     index :usize,
@@ -33,8 +35,8 @@ pub struct Subtitle {
 }
 
 impl Subtitle {
-    pub fn from(index :usize, ts :u128, caption :String) -> Self {
-        let period = Period::from(ts);
+    pub fn new(index :usize, ts :u128, caption :String) -> Self {
+        let period = Period::new(ts);
 
         Self {
             index, period, caption
@@ -58,10 +60,12 @@ impl Subtitle {
     }
 }
 
+#[cfg(test)]
 trait Display {
     fn to_string(&self) -> String;
 }
 
+#[cfg(test)]
 impl fmt::Display for Subtitle {
     fn fmt(&self, fmtr :&mut fmt::Formatter<'_>) -> fmt::Result {
         write!(fmtr,
@@ -80,7 +84,7 @@ struct Period {
 }
 
 impl Period {
-    fn from(end :u128) -> Self {
+    fn new(end :u128) -> Self {
         let mut ms = end;
         ms -= 4000;
         let begin = ms;
@@ -105,10 +109,15 @@ mod test {
 
     #[test]
     fn subtitle_to_string() {
-        let text = "something something capitalism bad".into();
+        // Arrange
+        let index = 1;
+        let ts = 123123;
+        let caption = "something something capitalism bad".into();
 
-        let sub = Subtitle::from(1, 123123, text);
+        // Act
+        let sub = Subtitle::new(index, ts, caption);
 
+        // Assert
         assert_eq!(
             "1\n00:01:59,123 --> 00:02:03,123\nsomething something capitalism bad\n",
             sub.to_string()
