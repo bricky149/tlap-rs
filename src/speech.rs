@@ -133,7 +133,7 @@ pub fn record_input(model :Model, stream :Stream) {
         let model = model.clone();
         let now_ts = start.elapsed().as_millis();
 
-        // This will only spawn as many threads as there are CPU cores
+        // Process audio on a separate (detached) thread
         thread::spawn(move ||
             if let Err(e) = transcribe_live(model, sub_num, now_ts) {
                 eprintln!("{:?}", e)
@@ -142,7 +142,6 @@ pub fn record_input(model :Model, stream :Stream) {
                 eprint!("\r Written {} subtitles so far...", sub_num)
             }
         );
-
         // Prepare for next iteration
         sub_num += 1
     }
@@ -173,7 +172,7 @@ fn transcribe_live(model :Arc<Mutex<Model>>, sub_num :usize, ts :u128)
     Ok(())
 }
 
-pub fn transcribe(mut model :Model, sample_lines :Vec<[i16;FOUR_SECONDS]>,
+pub fn transcribe(mut model :Model, sample_lines :Vec<Vec<i16>>,
     subs_path :String) -> Result<(), TlapError> {
 
     let sub_total = sample_lines.len();
@@ -214,6 +213,7 @@ pub fn get_all_samples(audio_path :String) -> Result<Vec<i16>, TlapError> {
         let samples :Vec<i16> = r.samples()
             .map(|s| s.unwrap_or_default())
             .collect();
+
         Ok(samples)
     } else {
         Err(TlapError::ReadFileFailed)
@@ -234,6 +234,7 @@ pub fn get_new_samples(audio_path :String) -> Result<Vec<i16>, TlapError> {
             let samples :Vec<i16> = r.samples()
                 .map(|s| s.unwrap_or_default())
                 .collect();
+
             Ok(samples)
         } else {
             Err(TlapError::ReadFileFailed)
@@ -244,48 +245,48 @@ pub fn get_new_samples(audio_path :String) -> Result<Vec<i16>, TlapError> {
 }
 
 pub fn split_audio_lines(audio_buffer :Vec<i16>)
-    -> Result<Vec<[i16;FOUR_SECONDS]>, TlapError> {
+    -> Result<Vec<Vec<i16>>, TlapError> {
 
-    let mut audio_lines :Vec<[i16;FOUR_SECONDS]> = Vec::new();
+    let mut audio_lines :Vec<Vec<i16>> = Vec::with_capacity(2);
 
-    let audio_length = audio_buffer.len();
-    let total_lines = audio_length / FOUR_SECONDS;
+    let mut silence_periods = Vec::with_capacity(2);
+    let mut silent_samples = 0;
 
-    let mut current_samples;
-    let mut samples_to_process;
-    let mut sample_buffer = audio_buffer.split_at(0).1;
-
-    for _ in 0..=total_lines {
-        let remaining_length = sample_buffer.len();
-
-        if remaining_length >= FOUR_SECONDS {
-            // We are interested in the last four seconds' worth of samples
-            current_samples = sample_buffer.split_at(FOUR_SECONDS).0;
-            samples_to_process = sample_buffer.split_at(FOUR_SECONDS).1;
-            sample_buffer = samples_to_process;
-
-            if let Ok(l) = current_samples.try_into() {
-                audio_lines.push(l)
-            } else {
-                return Err(TlapError::AudioSplitFailed)
+    for (i, s) in audio_buffer.iter().enumerate() {
+        // Check if sample has no amplitude
+        if *s == 0 {
+            // Add index of where we think there is silence
+            if silent_samples >= 1200 {
+                silence_periods.push(i);
+                silent_samples = 0;
+                continue
             }
+            silent_samples += 1
         } else {
-            // Put remaining chunks in a vector and fill the empty
-            // space with zeroes so it is the right size
-            current_samples = sample_buffer;
-            let len = FOUR_SECONDS - current_samples.len();
-            let mut last_samples = vec![0i16;len];
-
-            for s in current_samples {
-                last_samples.push(*s)
-            }
-
-            if let Ok(l) = last_samples.try_into() {
-                audio_lines.push(l)
-            } else {
-                return Err(TlapError::AudioSplitFailed)
-            }
+            // Silence broken
+            silent_samples = 0
         }
+    }
+
+    let mut sample_buffer = audio_buffer.split_at(0).1;
+    let mut current_samples;
+    let mut cursor = 0;
+
+    for i in silence_periods {
+        // Work out where to split based on what we have
+        // already processed
+        let idx = i - cursor;
+
+        current_samples = sample_buffer.split_at(idx).0;
+        sample_buffer = sample_buffer.split_at(idx).1;
+
+        if let Ok(l) = current_samples.try_into() {
+            audio_lines.push(l)
+        } else {
+            return Err(TlapError::AudioSplitFailed)
+        }
+        // Store index so we know where to continue from
+        cursor = i
     }
 
     Ok(audio_lines)
