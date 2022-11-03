@@ -23,7 +23,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound::{SampleFormat, WavReader, WavSpec, WavWriter};
 
 use crate::Subtitle;
-use crate::enums::TlapError;
+use crate::TlapError;
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};

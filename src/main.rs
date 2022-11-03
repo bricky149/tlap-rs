@@ -23,11 +23,9 @@ extern crate hound;
 
 use std::env::args;
 
-mod enums;
 mod speech;
 mod subtitle;
 
-use enums::TranscriptionType;
 use speech::*;
 use subtitle::Subtitle;
 
@@ -51,6 +49,26 @@ Tells the program to transliterate recorded audio.
 FILE
 Audio file to transliterate from. Used when 'postrecord' or 'pr' is passed.
 ";
+
+#[derive(Debug)]
+pub enum TlapError {
+	AudioSplitFailed,
+	NoInputDevice,
+	CreateRecordingFailed,
+	NoInputStream,
+	NoSpeechModel,
+	InvalidSpeechModel,
+	ReadFileFailed,
+	ModelLockFailed,
+	TranscriptionFailed,
+	WriteSubtitlesFailed
+}
+
+pub enum TranscriptionType {
+	Invalid,
+	RealTime,
+	PostRecord
+}
 
 fn main() {
 	let mut args = args();
