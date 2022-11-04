@@ -266,8 +266,8 @@ pub fn split_audio_lines(audio_buffer :Vec<i16>)
     let mut silent_samples = 0;
 
     for (i, s) in audio_buffer.iter().enumerate() {
-        // Check if sample has no amplitude
-        if *s == 0 {
+        // Check if sample has little-to-no amplitude
+        if *s >= -8 && *s <= 8 {
             // Add index of where we think there is silence
             // Lower values shorten lines but increase false positives
             // 1600 is 1/10th of model sample rate (100ms)
