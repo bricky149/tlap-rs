@@ -125,6 +125,7 @@ pub fn record_input(model :Model, stream :Stream) {
     // Subtitle properties
     let start = Instant::now();
     let mut sub_num = 1;
+    let mut prev_ts = 0;
 
     while let Ok(()) = stream.play() {
         // Wait for enough input to process
@@ -135,7 +136,7 @@ pub fn record_input(model :Model, stream :Stream) {
 
         // Process audio on a separate (detached) thread
         thread::spawn(move ||
-            if let Err(e) = transcribe_live(model, sub_num, now_ts) {
+            if let Err(e) = transcribe_live(model, sub_num, prev_ts, now_ts) {
                 eprintln!("{:?}", e)
             } else {
                 // Use eprint!() as a progress indicator as per Rust docs
@@ -143,18 +144,19 @@ pub fn record_input(model :Model, stream :Stream) {
             }
         );
         // Prepare for next iteration
-        sub_num += 1
+        sub_num += 1;
+        prev_ts = now_ts
     }
 }
 
-fn transcribe_live(model :Arc<Mutex<Model>>, sub_num :usize, ts :u128)
+fn transcribe_live(model :Arc<Mutex<Model>>, sub_num :usize, begin_ms :u128, end_ms :u128)
     -> Result<(), TlapError> {
 
     match get_new_samples(LIVE_RECORDING_PATH.into()) {
         Ok(s) => {
             if let Ok(mut m) = model.try_lock() {
                 if let Ok(t) = m.speech_to_text(&s) {
-                    let sub = Subtitle::new(sub_num, ts, t);
+                    let sub = Subtitle::new(sub_num, begin_ms, end_ms, t);
     
                     if let Err(_e) = sub.write_to(LIVE_SUBTITLES_PATH.into()) {
                         return Err(TlapError::WriteSubtitlesFailed)
@@ -175,13 +177,24 @@ fn transcribe_live(model :Arc<Mutex<Model>>, sub_num :usize, ts :u128)
 pub fn transcribe(mut model :Model, sample_lines :Vec<Vec<i16>>,
     subs_path :String) -> Result<(), TlapError> {
 
-    let sub_total = sample_lines.len();
+    let mut sub_total = sample_lines.len();
     let mut sub_count = 1;
-    let mut timestamp = 4000;
+    let mut prev_ts = 0;
+    let mut now_ts;
 
     for line in sample_lines {
         if let Ok(t) = model.speech_to_text(&line) {
-            let sub = Subtitle::new(sub_count, timestamp, t);
+            if t.len() == 0 {
+                sub_total -= 1;
+                continue
+            }
+
+            // Dividing sample length by 15 gives a good timestamp estimation
+            // 15 causes slight cumulative lag, 16 causes cumulative haste
+            let sample_length :u128 = line.len().try_into().unwrap();
+            now_ts = prev_ts + (sample_length / 15);
+
+            let sub = Subtitle::new(sub_count, prev_ts, now_ts, t);
 
             // Use eprint!() as a progress indicator as per Rust docs
             if sub.write_to(subs_path.clone()).is_ok() {
@@ -190,7 +203,7 @@ pub fn transcribe(mut model :Model, sample_lines :Vec<Vec<i16>>,
 
                 // Prepare for next iteration
                 sub_count += 1;
-                timestamp += 4000
+                prev_ts = now_ts
             } else {
                 return Err(TlapError::WriteSubtitlesFailed)
             }
@@ -256,7 +269,9 @@ pub fn split_audio_lines(audio_buffer :Vec<i16>)
         // Check if sample has no amplitude
         if *s == 0 {
             // Add index of where we think there is silence
-            if silent_samples >= 1200 {
+            // Lower values shorten lines but increase false positives
+            // 1600 is 1/10th of model sample rate (100ms)
+            if silent_samples >= 1600 {
                 silence_periods.push(i);
                 silent_samples = 0;
                 continue

@@ -35,8 +35,8 @@ pub struct Subtitle {
 }
 
 impl Subtitle {
-    pub fn new(index :usize, ts :u128, caption :String) -> Self {
-        let period = Period::new(ts);
+    pub fn new(index :usize, begin :u128, end :u128, caption :String) -> Self {
+        let period = Period::new(begin, end);
 
         Self {
             index, period, caption
@@ -84,11 +84,7 @@ struct Period {
 }
 
 impl Period {
-    fn new(end :u128) -> Self {
-        let mut ms = end;
-        ms -= 4000;
-        let begin = ms;
-
+    fn new(begin :u128, end :u128) -> Self {
         Self {
             begin, end
         }
@@ -111,11 +107,12 @@ mod test {
     fn subtitle_to_string() {
         // Arrange
         let index = 1;
-        let ts = 123123;
+        let begin = 119123;
+        let end = 123123;
         let caption = "something something capitalism bad".into();
 
         // Act
-        let sub = Subtitle::new(index, ts, caption);
+        let sub = Subtitle::new(index, begin, end, caption);
 
         // Assert
         assert_eq!(
