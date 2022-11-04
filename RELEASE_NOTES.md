@@ -1,5 +1,9 @@
 # Version History
 
+## v0.5.1 (2022-11-04)
+* Refactor streaming code to read only data written since the last read
+* Split audio lines where we think there is silence, rather than every 64k samples
+
 ## v0.5.0 (2022-10-11)
 * Add a test for subtitle output
 * Change Options to Results as all data is needed during execution
@@ -35,7 +39,7 @@
 
 ## v0.2.0 (2021-12-16)
 * Added ability to create subtitles based on live input via PortAudio
-* Added one-second lag to allow for DeepSpeech to determine words before they're saved
+* Added one-second lag to allow for DeepSpeech to determine words before they are saved
 * Fixed subtitle pacing, previously it was averaging out words per subtitle which had sync issues
 * Fixed an issue with some subtitles being written as 60 seconds rather than 00
 
