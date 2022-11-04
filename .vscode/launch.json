@@ -19,7 +19,7 @@
                     "kind": "bin"
                 }
             },
-            "args": ["rt"],
+            "args": ["pr", "examples/whitestag.wav"],
             "env": {
                 "LD_LIBRARY_PATH": "/usr/local/lib/",
                 "LIBRARY_PATH": "/usr/local/lib/"
