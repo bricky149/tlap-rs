@@ -1,8 +1,8 @@
 [package]
 name = "tlap"
 description = "Transliterate Language for an Accessibility Purpose"
-version = "0.5.1"
-authors = ["Bricky <bricky149@teknik.io>"]
+version = "0.5.2"
+authors = ["Bricky <thatbrickster@tutanota.com>"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
