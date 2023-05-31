@@ -1,5 +1,5 @@
 /*
-	Copyright 2021-2022 Bricky <bricky149@teknik.io>
+	Copyright 2021-2023 Bricky <thatbrickster@tutanota.com>
 
     This file is part of tlap.
 

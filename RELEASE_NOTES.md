@@ -1,5 +1,11 @@
 # Version History
 
+## v0.5.2 (2023-05-31)
+* Update dependencies
+* Fix build error caused by cpal changes
+* Create a new subtitle file on every run instead of always appending
+* Update copyright notices
+
 ## v0.5.1 (2022-11-04)
 * Refactor streaming code to read only data written since the last read
 * Split audio lines where we think there is silence, rather than every 64k samples

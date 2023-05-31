@@ -20,6 +20,11 @@ No, the binaries used were obtained from the project's [releases page](https://g
 
 ## Prerequisites
 
+### Packages
+The following list is for Fedora (38). Ensure packages offering similar functionality for your distro are installed.
+
+`rust cargo glibc-devel alsa-lib-devel`
+
 ### libstt
 You will need to download the libs from [Coqui's releases page](https://github.com/coqui-ai/STT/releases/) and modify the LIBRARY_PATH in 'perform_stt.sh'. On Linux I would suggest /usr/local/lib, on Windows I have bundled binaries as a suggested place to run them from.
 

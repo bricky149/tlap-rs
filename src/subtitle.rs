@@ -1,5 +1,5 @@
 /*
-	Copyright 2021-2022 Bricky <bricky149@teknik.io>
+	Copyright 2021-2023 Bricky <thatbrickster@tutanota.com>
 
     This file is part of tlap.
 
@@ -44,10 +44,16 @@ impl Subtitle {
     }
 
     pub fn write_to(self, path :String) -> Result<()> {
-        let mut file = OpenOptions::new()
+        let mut file = if self.index != 1 {
+            OpenOptions::new()
             .append(true)
+            .open(path)?
+        } else {
+            OpenOptions::new()
+            .write(true)
             .create(true)
-            .open(path)?;
+            .open(path)?
+        };
 
         writeln!(file, "{}\n{} --> {}\n{}\n",
             self.index,
